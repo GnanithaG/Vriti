@@ -39,14 +39,14 @@ captureBtn.addEventListener("click", async () => {
     });
 
     if (res.status === 401) {
-      setStatus("Your JobPilot session expired. Please log in again.");
+      setStatus("Your Vriti session expired. Please log in again.");
       return;
     }
     if (!res.ok) throw new Error(`API returned ${res.status}`);
     const saved = await res.json();
     setStatus(`Saved: ${saved.title || saved.url}`);
   } catch (err) {
-    setStatus(`Couldn't save job. Is JobPilot running locally? (${err.message})`);
+    setStatus(`Couldn't save job. Is Vriti running locally? (${err.message})`);
   } finally {
     captureBtn.disabled = false;
   }
@@ -88,7 +88,7 @@ prefillBtn.addEventListener("click", async () => {
   try {
     const res = await apiFetch("/api/prefill");
     if (res.status === 401) {
-      setStatus("Your JobPilot session expired. Please log in again.");
+      setStatus("Your Vriti session expired. Please log in again.");
       return;
     }
     if (!res.ok) throw new Error(`API returned ${res.status}`);
@@ -103,7 +103,7 @@ prefillBtn.addEventListener("click", async () => {
       `Filled ${filled} field(s). Review everything, then press Submit yourself.`
     );
   } catch (err) {
-    setStatus(`Couldn't prefill. Is JobPilot running locally? (${err.message})`);
+    setStatus(`Couldn't prefill. Is Vriti running locally? (${err.message})`);
   } finally {
     prefillBtn.disabled = false;
   }
@@ -115,7 +115,7 @@ async function init() {
     const res = await apiFetch("/api/auth/me");
     loggedIn = res.ok;
   } catch {
-    // JobPilot isn't reachable at all — treat like logged out; button
+    // Vriti isn't reachable at all — treat like logged out; button
     // clicks will surface the real "is it running locally?" error.
   }
 

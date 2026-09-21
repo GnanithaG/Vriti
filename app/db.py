@@ -1,4 +1,4 @@
-"""SQLite connection and schema for JobPilot."""
+"""SQLite connection and schema for Vriti."""
 import datetime
 import sqlite3
 from contextlib import contextmanager

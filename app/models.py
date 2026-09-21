@@ -1,4 +1,4 @@
-"""Pydantic models for JobPilot's API."""
+"""Pydantic models for Vriti's API."""
 from typing import Optional
 
 from pydantic import BaseModel

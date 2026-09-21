@@ -23,7 +23,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="JobPilot", lifespan=lifespan)
+app = FastAPI(title="Vriti", lifespan=lifespan)
 
 app.add_middleware(SessionMiddleware, secret_key=get_or_create_secret_key(), same_site="lax")
 

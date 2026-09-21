@@ -1,4 +1,4 @@
-"""Password hashing and session-based auth for JobPilot."""
+"""Password hashing and session-based auth for Vriti."""
 import os
 import secrets
 from pathlib import Path

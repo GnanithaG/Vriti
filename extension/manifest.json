@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "JobPilot",
+  "name": "Vriti",
   "version": "0.1.0",
-  "description": "Capture job postings and preview safe form prefill. You always press Submit — JobPilot never does.",
+  "description": "Capture job postings and preview safe form prefill. You always press Submit — Vriti never does.",
   "permissions": ["activeTab", "scripting"],
   "host_permissions": [
     "http://127.0.0.1:8000/*",
@@ -10,7 +10,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "JobPilot"
+    "default_title": "Vriti"
   },
   "content_scripts": [
     {

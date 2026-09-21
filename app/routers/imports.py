@@ -9,7 +9,7 @@ from .applications import get_application_row
 
 router = APIRouter(prefix="/api/imports", tags=["imports"])
 
-REQUEST_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; JobPilot/0.1)"}
+REQUEST_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; Vriti/0.1)"}
 REQUEST_TIMEOUT = 10.0
 
 

@@ -1,10 +1,10 @@
-# JobPilot
+# Vriti
 
 A job application copilot: register and log in, capture and import job postings, track them
 through a pipeline, get keyword-based fit analysis and AI-assisted resume tailoring, and use a
 Chrome/Edge extension to preview safe form prefill on real application pages.
 
-**The person always presses Submit — JobPilot never submits an application on its own.**
+**The person always presses Submit — Vriti never submits an application on its own.**
 
 ## What's here
 
@@ -50,12 +50,12 @@ Copy `.env.example` to `.env`:
 
 - `ANTHROPIC_API_KEY` — required for AI-assisted resume tailoring. Never hardcoded, never sent
   anywhere but Anthropic's API.
-- `SECRET_KEY` — signs session cookies. If left blank, JobPilot generates a random one on first
+- `SECRET_KEY` — signs session cookies. If left blank, Vriti generates a random one on first
   run and saves it back to `.env`.
 
 ### Upgrading from a pre-accounts install
 
-If you have a local `data/jobpilot.db` from before accounts existed, JobPilot detects the old
+If you have a local `data/jobpilot.db` from before accounts existed, Vriti detects the old
 schema on startup, renames it to `data/jobpilot.pre-auth-<timestamp>.bak` (nothing is deleted),
 and starts fresh. Register a new account and re-import/re-upload — local dev data isn't migrated.
 
@@ -65,7 +65,7 @@ and starts fresh. Register a new account and re-import/re-upload — local dev d
 2. Enable "Developer mode".
 3. Click "Load unpacked" and select the `extension/` folder.
 4. Log in to the dashboard at http://127.0.0.1:8000 first — the extension shares that session.
-5. Open a job posting page and click the JobPilot icon to capture the job or preview a prefill.
+5. Open a job posting page and click the Vriti icon to capture the job or preview a prefill.
 
 ## Ground rules
 

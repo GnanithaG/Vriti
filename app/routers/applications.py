@@ -108,7 +108,7 @@ def export_applications_csv(user: dict = Depends(get_current_user)):
     return StreamingResponse(
         buffer,
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=jobpilot-applications.csv"},
+        headers={"Content-Disposition": "attachment; filename=vriti-applications.csv"},
     )
 
 

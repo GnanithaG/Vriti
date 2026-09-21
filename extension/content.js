@@ -1,4 +1,4 @@
-// JobPilot content script.
+// Vriti content script.
 //
 // Two jobs, both read-only with respect to submission:
 //   1. Extract job posting data (JobPosting JSON-LD, falling back to page text).
