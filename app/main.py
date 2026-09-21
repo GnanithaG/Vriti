@@ -1,12 +1,15 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .db import init_db
-from .routers import imports, jobs, profile, resumes, stats
+load_dotenv()  # local .env only — e.g. ANTHROPIC_API_KEY for Phase 4 tailoring
+
+from .db import init_db  # noqa: E402
+from .routers import imports, jobs, profile, resumes, stats, tailoring  # noqa: E402
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -40,5 +43,6 @@ app.include_router(profile.router)
 app.include_router(imports.router)
 app.include_router(resumes.router)
 app.include_router(stats.router)
+app.include_router(tailoring.router)
 
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

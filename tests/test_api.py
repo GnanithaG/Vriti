@@ -26,6 +26,7 @@ def client(tmp_path, monkeypatch):
     import app.routers.profile as profile_module
     import app.routers.resumes as resumes_module
     import app.routers.stats as stats_module
+    import app.routers.tailoring as tailoring_module
 
     monkeypatch.setattr(jobs_module, "db", db_module.db)
     monkeypatch.setattr(profile_module, "db", db_module.db)
@@ -33,6 +34,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(resumes_module, "db", db_module.db)
     monkeypatch.setattr(resumes_module, "RESUMES_DIR", resumes_dir)
     monkeypatch.setattr(stats_module, "db", db_module.db)
+    monkeypatch.setattr(tailoring_module, "db", db_module.db)
+    monkeypatch.setattr(tailoring_module, "RESUMES_DIR", resumes_dir)
 
     import app.main as main_module
 
@@ -317,6 +320,113 @@ def test_jobs_csv_export(client):
     body = res.text
     assert "CSV Role" in body
     assert body.startswith("id,url,title")
+
+
+def test_tailor_requires_api_key(client, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    job = client.post(
+        "/api/jobs",
+        json={"url": "https://example.com/job/tailor1", "description": "Python and FastAPI role."},
+    ).json()
+    content = make_docx_bytes(["Experienced Python engineer."])
+    resume = client.post(
+        "/api/resumes",
+        data={"label": "Resume"},
+        files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    ).json()
+
+    res = client.post(f"/api/jobs/{job['id']}/tailor", params={"resume_id": resume["id"]})
+    assert res.status_code == 400
+    assert "ANTHROPIC_API_KEY" in res.json()["detail"]
+
+
+def test_tailor_generates_suggestions(client, monkeypatch):
+    import app.routers.tailoring as tailoring_module
+    from app.tailoring import BulletSuggestion
+
+    monkeypatch.setattr(
+        tailoring_module,
+        "generate_suggestions",
+        lambda *a, **k: [
+            BulletSuggestion(
+                original="Experienced Python engineer.",
+                suggested="Experienced Python engineer specializing in FastAPI.",
+                rationale="Job emphasizes FastAPI.",
+                grounded=True,
+                ungrounded_note=None,
+            ),
+            BulletSuggestion(
+                original="Experienced Python engineer.",
+                suggested="Led a team of 10 engineers.",
+                rationale="Job wants leadership experience.",
+                grounded=False,
+                ungrounded_note="Resume does not mention managing a team.",
+            ),
+        ],
+    )
+
+    job = client.post(
+        "/api/jobs",
+        json={"url": "https://example.com/job/tailor2", "description": "Python and FastAPI role."},
+    ).json()
+    content = make_docx_bytes(["Experienced Python engineer."])
+    resume = client.post(
+        "/api/resumes",
+        data={"label": "Resume"},
+        files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    ).json()
+
+    res = client.post(f"/api/jobs/{job['id']}/tailor", params={"resume_id": resume["id"]})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["resume_text"] == "Experienced Python engineer."
+    assert len(body["suggestions"]) == 2
+    assert body["suggestions"][0]["grounded"] is True
+    assert body["suggestions"][1]["grounded"] is False
+    assert "team" in body["suggestions"][1]["ungrounded_note"]
+
+
+def test_tailor_missing_description(client):
+    job = client.post("/api/jobs", json={"url": "https://example.com/job/tailor3"}).json()
+    content = make_docx_bytes(["Resume text"])
+    resume = client.post(
+        "/api/resumes",
+        data={"label": "Resume"},
+        files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    ).json()
+
+    res = client.post(f"/api/jobs/{job['id']}/tailor", params={"resume_id": resume["id"]})
+    assert res.status_code == 400
+
+
+def test_save_resume_version(client):
+    job = client.post(
+        "/api/jobs", json={"url": "https://example.com/job/tailor4", "title": "Backend Role"}
+    ).json()
+    content = make_docx_bytes(["Original resume line."])
+    resume = client.post(
+        "/api/resumes",
+        data={"label": "Base resume"},
+        files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    ).json()
+
+    res = client.post(
+        f"/api/resumes/{resume['id']}/versions",
+        json={
+            "job_id": job["id"],
+            "final_text": "Tailored resume line for Backend Role.",
+        },
+    )
+    assert res.status_code == 200
+    version = res.json()
+    assert version["base_resume_id"] == resume["id"]
+    assert version["job_id"] == job["id"]
+    assert version["extracted_text"] == "Tailored resume line for Backend Role."
+    assert "tailored for Backend Role" in version["label"]
+
+    res_list = client.get("/api/resumes")
+    assert len(res_list.json()) == 2
 
 
 def test_profile_roundtrip(client):

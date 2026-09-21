@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS resumes (
     file_path TEXT NOT NULL,
     extracted_text TEXT,
     base_resume_id INTEGER REFERENCES resumes(id),
+    job_id INTEGER REFERENCES jobs(id),
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -61,6 +62,13 @@ def db():
         conn.close()
 
 
+def _ensure_column(conn, table, column, ddl):
+    """Adds `column` to `table` if an older local DB predates it."""
+    existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+
+
 def init_db():
     RESUMES_DIR.mkdir(exist_ok=True)
     with db() as conn:
@@ -68,6 +76,7 @@ def init_db():
         conn.execute(
             "INSERT OR IGNORE INTO profile (id) VALUES (1)"
         )
+        _ensure_column(conn, "resumes", "job_id", "job_id INTEGER REFERENCES jobs(id)")
 
 
 def upsert_job(conn, url, title=None, company=None, location=None, description=None):

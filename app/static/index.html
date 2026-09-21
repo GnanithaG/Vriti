@@ -122,10 +122,11 @@
             <th>Link</th>
             <th>Fit</th>
             <th>Notes</th>
+            <th>Tailor</th>
           </tr>
         </thead>
         <tbody id="jobs-tbody">
-          <tr><td colspan="8" class="empty">No jobs saved yet. Use the extension to capture one.</td></tr>
+          <tr><td colspan="9" class="empty">No jobs saved yet. Use the extension to capture one.</td></tr>
         </tbody>
       </table>
 
@@ -144,6 +145,29 @@
         <div>
           <button id="notes-save-btn" type="button">Save notes</button>
           <span id="notes-status" class="status"></span>
+        </div>
+      </div>
+
+      <div id="tailor-panel" class="hidden">
+        <h3>Tailor resume for: <span id="tailor-panel-job-title"></span></h3>
+        <p class="hint">
+          AI-assisted, evidence-based rewrites — nothing here is applied until you accept it below.
+          Requires <code>ANTHROPIC_API_KEY</code> in a local <code>.env</code>.
+        </p>
+        <div class="inline-form">
+          <select id="tailor-resume-select"></select>
+          <button id="tailor-generate-btn" type="button">Generate suggestions</button>
+        </div>
+        <span id="tailor-status" class="status"></span>
+
+        <div id="tailor-suggestions"></div>
+
+        <div id="tailor-save-block" class="hidden">
+          <div class="inline-form">
+            <input type="text" id="tailor-version-label" placeholder="Label for this version (optional)" />
+            <button id="tailor-save-btn" type="button">Save as new resume version</button>
+          </div>
+          <span id="tailor-save-status" class="status"></span>
         </div>
       </div>
     </section>

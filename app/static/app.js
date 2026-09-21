@@ -34,7 +34,7 @@ function daysSince(dateStr) {
 function renderJobs(jobs) {
   if (jobs.length === 0) {
     jobsTbody.innerHTML =
-      '<tr><td colspan="8" class="empty">No jobs match.</td></tr>';
+      '<tr><td colspan="9" class="empty">No jobs match.</td></tr>';
     return;
   }
 
@@ -98,6 +98,15 @@ function renderJobs(jobs) {
     notesBtn.addEventListener("click", () => openNotesPanel(job));
     notesTd.appendChild(notesBtn);
     tr.appendChild(notesTd);
+
+    const tailorTd = document.createElement("td");
+    const tailorBtn = document.createElement("button");
+    tailorBtn.type = "button";
+    tailorBtn.className = "row-btn";
+    tailorBtn.textContent = "Tailor";
+    tailorBtn.addEventListener("click", () => openTailorPanel(job));
+    tailorTd.appendChild(tailorBtn);
+    tr.appendChild(tailorTd);
 
     jobsTbody.appendChild(tr);
   }
@@ -248,6 +257,7 @@ const resumeFileInput = document.getElementById("resume-file-input");
 const resumeUploadStatus = document.getElementById("resume-upload-status");
 const resumesList = document.getElementById("resumes-list");
 const fitResumeSelect = document.getElementById("fit-resume-select");
+const tailorResumeSelect = document.getElementById("tailor-resume-select");
 
 let resumes = [];
 
@@ -269,12 +279,14 @@ function renderResumes() {
     }
   }
 
-  fitResumeSelect.innerHTML = "";
-  for (const resume of resumes) {
-    const opt = document.createElement("option");
-    opt.value = String(resume.id);
-    opt.textContent = resume.label;
-    fitResumeSelect.appendChild(opt);
+  for (const select of [fitResumeSelect, tailorResumeSelect]) {
+    select.innerHTML = "";
+    for (const resume of resumes) {
+      const opt = document.createElement("option");
+      opt.value = String(resume.id);
+      opt.textContent = resume.label;
+      select.appendChild(opt);
+    }
   }
 }
 
@@ -445,6 +457,171 @@ async function loadStats() {
     statsCards.appendChild(card);
   }
 }
+
+// --- AI-assisted resume tailoring -----------------------------------------
+
+const tailorPanel = document.getElementById("tailor-panel");
+const tailorPanelJobTitle = document.getElementById("tailor-panel-job-title");
+const tailorGenerateBtn = document.getElementById("tailor-generate-btn");
+const tailorStatus = document.getElementById("tailor-status");
+const tailorSuggestionsEl = document.getElementById("tailor-suggestions");
+const tailorSaveBlock = document.getElementById("tailor-save-block");
+const tailorVersionLabel = document.getElementById("tailor-version-label");
+const tailorSaveBtn = document.getElementById("tailor-save-btn");
+const tailorSaveStatus = document.getElementById("tailor-save-status");
+
+let currentTailorJobId = null;
+let tailorBaseResumeText = "";
+let tailorBaseResumeId = null;
+let tailorDecisions = []; // [{ original, editedText, accepted }]
+
+function openTailorPanel(job) {
+  currentTailorJobId = job.id;
+  tailorPanelJobTitle.textContent = job.title || job.url;
+  tailorStatus.textContent = "";
+  tailorSuggestionsEl.innerHTML = "";
+  tailorSaveBlock.classList.add("hidden");
+  tailorVersionLabel.value = "";
+  tailorSaveStatus.textContent = "";
+  tailorPanel.classList.remove("hidden");
+  tailorPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function renderSuggestionCard(suggestion, index) {
+  const card = document.createElement("div");
+  card.className = `suggestion-card${suggestion.grounded ? "" : " ungrounded"}`;
+
+  const originalLabel = document.createElement("div");
+  originalLabel.className = "suggestion-label";
+  originalLabel.textContent = "Original";
+  card.appendChild(originalLabel);
+
+  const original = document.createElement("div");
+  original.className = "suggestion-original";
+  original.textContent = suggestion.original;
+  card.appendChild(original);
+
+  const suggestedLabel = document.createElement("div");
+  suggestedLabel.className = "suggestion-label";
+  suggestedLabel.textContent = "Suggested (editable)";
+  card.appendChild(suggestedLabel);
+
+  const textarea = document.createElement("textarea");
+  textarea.className = "suggestion-textarea";
+  textarea.rows = 3;
+  textarea.value = suggestion.suggested;
+  textarea.addEventListener("input", () => {
+    tailorDecisions[index].editedText = textarea.value;
+  });
+  card.appendChild(textarea);
+
+  if (suggestion.rationale) {
+    const rationale = document.createElement("div");
+    rationale.className = "suggestion-rationale";
+    rationale.textContent = suggestion.rationale;
+    card.appendChild(rationale);
+  }
+
+  if (!suggestion.grounded) {
+    const warning = document.createElement("div");
+    warning.className = "suggestion-warning";
+    warning.textContent = `⚠ Not fully grounded in your resume: ${suggestion.ungrounded_note || "review before accepting."}`;
+    card.appendChild(warning);
+  }
+
+  const acceptRow = document.createElement("label");
+  acceptRow.className = "suggestion-accept";
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.addEventListener("change", () => {
+    tailorDecisions[index].accepted = checkbox.checked;
+  });
+  acceptRow.appendChild(checkbox);
+  acceptRow.appendChild(document.createTextNode("Use this rewrite"));
+  card.appendChild(acceptRow);
+
+  return card;
+}
+
+tailorGenerateBtn.addEventListener("click", async () => {
+  if (!currentTailorJobId) return;
+  const resumeId = tailorResumeSelect.value;
+  if (!resumeId) {
+    tailorStatus.textContent = "Upload a resume first.";
+    return;
+  }
+
+  tailorStatus.textContent = "Generating suggestions… this calls the Anthropic API.";
+  tailorSuggestionsEl.innerHTML = "";
+  tailorSaveBlock.classList.add("hidden");
+
+  try {
+    const res = await fetch(
+      `/api/jobs/${currentTailorJobId}/tailor?resume_id=${resumeId}`,
+      { method: "POST" }
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const result = await res.json();
+
+    tailorBaseResumeText = result.resume_text;
+    tailorBaseResumeId = Number(resumeId);
+    tailorDecisions = result.suggestions.map((s) => ({
+      original: s.original,
+      editedText: s.suggested,
+      accepted: false,
+    }));
+
+    if (result.suggestions.length === 0) {
+      tailorStatus.textContent = "No rewrite suggestions — this resume already covers the job well.";
+      return;
+    }
+
+    tailorStatus.textContent = `${result.suggestions.length} suggestion(s). Review each, then accept the ones to keep.`;
+    result.suggestions.forEach((s, i) => {
+      tailorSuggestionsEl.appendChild(renderSuggestionCard(s, i));
+    });
+    tailorSaveBlock.classList.remove("hidden");
+  } catch (err) {
+    tailorStatus.textContent = `Failed: ${err.message}`;
+  }
+});
+
+tailorSaveBtn.addEventListener("click", async () => {
+  if (!currentTailorJobId || !tailorBaseResumeId) return;
+
+  let finalText = tailorBaseResumeText;
+  for (const decision of tailorDecisions) {
+    if (!decision.accepted) continue;
+    if (finalText.includes(decision.original)) {
+      finalText = finalText.replace(decision.original, decision.editedText);
+    }
+  }
+
+  tailorSaveStatus.textContent = "Saving…";
+  try {
+    const res = await fetch(`/api/resumes/${tailorBaseResumeId}/versions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        job_id: currentTailorJobId,
+        final_text: finalText,
+        label: tailorVersionLabel.value.trim() || null,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const saved = await res.json();
+    tailorSaveStatus.textContent = `Saved as "${saved.label}".`;
+    loadResumes();
+  } catch (err) {
+    tailorSaveStatus.textContent = `Failed: ${err.message}`;
+  }
+});
 
 loadProfile();
 loadJobs();
