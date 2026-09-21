@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key-not-for-production")
 
     import app.db as db_module
 
@@ -22,14 +23,18 @@ def client(tmp_path, monkeypatch):
     db_module.DATA_DIR.mkdir(exist_ok=True)
     resumes_dir.mkdir(exist_ok=True)
 
+    import app.auth as auth_module
+    import app.routers.applications as applications_module
+    import app.routers.auth as auth_router_module
     import app.routers.imports as imports_module
-    import app.routers.jobs as jobs_module
     import app.routers.profile as profile_module
     import app.routers.resumes as resumes_module
     import app.routers.stats as stats_module
     import app.routers.tailoring as tailoring_module
 
-    monkeypatch.setattr(jobs_module, "db", db_module.db)
+    monkeypatch.setattr(auth_module, "db", db_module.db)
+    monkeypatch.setattr(auth_router_module, "db", db_module.db)
+    monkeypatch.setattr(applications_module, "db", db_module.db)
     monkeypatch.setattr(profile_module, "db", db_module.db)
     monkeypatch.setattr(imports_module, "db", db_module.db)
     monkeypatch.setattr(resumes_module, "db", db_module.db)
@@ -47,44 +52,249 @@ def client(tmp_path, monkeypatch):
         yield test_client
 
 
+def register(client, email="user1@example.com", password="password123"):
+    res = client.post("/api/auth/register", json={"email": email, "password": password})
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+def make_docx_bytes(paragraphs):
+    document = docx.Document()
+    for text in paragraphs:
+        document.add_paragraph(text)
+    buffer = io.BytesIO()
+    document.save(buffer)
+    return buffer.getvalue()
+
+
 def test_health(client):
     res = client.get("/api/health")
     assert res.status_code == 200
     assert res.json() == {"status": "ok"}
 
 
-def test_job_create_list_and_dedupe(client):
+# --- Auth --------------------------------------------------------------
+
+
+def test_register_login_logout_flow(client):
+    register(client, email="ada@example.com", password="hunter22")
+
+    res_me = client.get("/api/auth/me")
+    assert res_me.status_code == 200
+    assert res_me.json()["email"] == "ada@example.com"
+
+    res_logout = client.post("/api/auth/logout")
+    assert res_logout.status_code == 200
+
+    res_me_after_logout = client.get("/api/auth/me")
+    assert res_me_after_logout.status_code == 401
+
+    res_login = client.post(
+        "/api/auth/login", json={"email": "ada@example.com", "password": "hunter22"}
+    )
+    assert res_login.status_code == 200
+
+    res_me_again = client.get("/api/auth/me")
+    assert res_me_again.status_code == 200
+
+
+def test_register_duplicate_email_rejected(client):
+    register(client, email="dupe@example.com")
+    res = client.post(
+        "/api/auth/register", json={"email": "dupe@example.com", "password": "password123"}
+    )
+    assert res.status_code == 400
+
+
+def test_register_short_password_rejected(client):
+    res = client.post(
+        "/api/auth/register", json={"email": "short@example.com", "password": "abc"}
+    )
+    assert res.status_code == 400
+
+
+def test_login_wrong_password_is_generic_error(client):
+    register(client, email="ada2@example.com", password="correct-password")
+    client.post("/api/auth/logout")
+
+    res_wrong_password = client.post(
+        "/api/auth/login", json={"email": "ada2@example.com", "password": "wrong"}
+    )
+    res_unknown_email = client.post(
+        "/api/auth/login", json={"email": "nobody@example.com", "password": "whatever"}
+    )
+    assert res_wrong_password.status_code == 401
+    assert res_unknown_email.status_code == 401
+    # Same generic message either way — never reveals whether the email exists.
+    assert res_wrong_password.json()["detail"] == res_unknown_email.json()["detail"]
+
+
+def test_unauthenticated_requests_are_rejected(client):
+    for method, path in [
+        ("get", "/api/applications"),
+        ("get", "/api/profile"),
+        ("get", "/api/resumes"),
+        ("get", "/api/stats"),
+    ]:
+        res = getattr(client, method)(path)
+        assert res.status_code == 401, f"{method.upper()} {path} should require auth"
+
+
+def test_two_accounts_do_not_see_each_others_data(client):
+    register(client, email="user1@example.com")
+    application1 = client.post(
+        "/api/applications",
+        json={"url": "https://example.com/job/isolation", "title": "User1's job"},
+    ).json()
+    content = make_docx_bytes(["User1's resume text"])
+    resume1 = client.post(
+        "/api/resumes",
+        data={"label": "User1 resume"},
+        files={"file": ("r.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    ).json()
+    client.put("/api/profile", json={"full_name": "User One", "email": "user1@example.com"})
+
+    client2 = TestClient(client.app)
+    register(client2, email="user2@example.com")
+
+    assert client2.get("/api/applications").json() == []
+    assert client2.get("/api/resumes").json() == []
+    assert client2.get("/api/profile").json()["full_name"] is None
+
+    # user2 can't reach user1's rows even by guessing the id.
+    assert client2.get(f"/api/resumes/{resume1['id']}").status_code == 404
+    assert client2.get(f"/api/resumes/{resume1['id']}/download").status_code == 404
+    assert (
+        client2.patch(f"/api/applications/{application1['id']}/notes", json={"notes": "x"}).status_code
+        == 404
+    )
+
+    # user1's own data is untouched and still theirs.
+    assert len(client.get("/api/applications").json()) == 1
+    assert len(client.get("/api/resumes").json()) == 1
+
+
+# --- Applications (per-user pipeline over the shared job catalog) -------
+
+
+def test_application_create_list_and_dedupe(client):
+    register(client)
     payload = {
         "url": "https://example.com/job/1",
         "title": "Engineer",
         "company": "Acme",
         "location": "Remote",
     }
-    res = client.post("/api/jobs", json=payload)
+    res = client.post("/api/applications", json=payload)
     assert res.status_code == 200
-    job = res.json()
-    assert job["title"] == "Engineer"
-    assert job["stage"] == "saved"
+    application = res.json()
+    assert application["title"] == "Engineer"
+    assert application["stage"] == "saved"
+    assert application["job_id"] is not None
 
-    # Deduping by URL returns the existing row, not a second insert.
-    res2 = client.post("/api/jobs", json=payload)
-    assert res2.json()["id"] == job["id"]
+    # Re-capturing the same URL dedupes the application, not just the catalog row.
+    res2 = client.post("/api/applications", json=payload)
+    assert res2.json()["id"] == application["id"]
 
-    res3 = client.get("/api/jobs")
+    res3 = client.get("/api/applications")
     assert len(res3.json()) == 1
 
 
-def test_job_stage_update(client):
-    job = client.post("/api/jobs", json={"url": "https://example.com/job/2"}).json()
-    res = client.patch(f"/api/jobs/{job['id']}/stage", json={"stage": "applied"})
+def test_application_stage_update(client):
+    register(client)
+    application = client.post("/api/applications", json={"url": "https://example.com/job/2"}).json()
+    res = client.patch(f"/api/applications/{application['id']}/stage", json={"stage": "applied"})
     assert res.status_code == 200
     assert res.json()["stage"] == "applied"
 
-    res_invalid = client.patch(f"/api/jobs/{job['id']}/stage", json={"stage": "bogus"})
+    res_invalid = client.patch(
+        f"/api/applications/{application['id']}/stage", json={"stage": "bogus"}
+    )
     assert res_invalid.status_code == 400
 
-    res_missing = client.patch("/api/jobs/999/stage", json={"stage": "applied"})
+    res_missing = client.patch("/api/applications/999/stage", json={"stage": "applied"})
     assert res_missing.status_code == 404
+
+
+def test_application_search_and_stage_filter(client):
+    register(client)
+    client.post("/api/applications", json={"url": "https://example.com/a", "title": "Backend Engineer", "company": "Acme"})
+    client.post("/api/applications", json={"url": "https://example.com/b", "title": "Sales Rep", "company": "Widgets Inc"})
+    application_c = client.post(
+        "/api/applications", json={"url": "https://example.com/c", "title": "Frontend Engineer", "company": "Acme"}
+    ).json()
+    client.patch(f"/api/applications/{application_c['id']}/stage", json={"stage": "applied"})
+
+    res_q = client.get("/api/applications", params={"q": "engineer"})
+    titles = {a["title"] for a in res_q.json()}
+    assert titles == {"Backend Engineer", "Frontend Engineer"}
+
+    res_company = client.get("/api/applications", params={"q": "Acme"})
+    assert len(res_company.json()) == 2
+
+    res_stage = client.get("/api/applications", params={"stage": "applied"})
+    assert [a["id"] for a in res_stage.json()] == [application_c["id"]]
+
+    res_combined = client.get("/api/applications", params={"q": "engineer", "stage": "saved"})
+    assert [a["title"] for a in res_combined.json()] == ["Backend Engineer"]
+
+
+def test_application_notes_update(client):
+    register(client)
+    application = client.post("/api/applications", json={"url": "https://example.com/notes"}).json()
+    assert application["notes"] is None
+
+    res = client.patch(
+        f"/api/applications/{application['id']}/notes", json={"notes": "Talked to recruiter Jane."}
+    )
+    assert res.status_code == 200
+    assert res.json()["notes"] == "Talked to recruiter Jane."
+
+    res_missing = client.patch("/api/applications/999/notes", json={"notes": "x"})
+    assert res_missing.status_code == 404
+
+
+def test_stats_counts_and_response_rate(client):
+    register(client)
+    ids = []
+    for i in range(4):
+        application = client.post(
+            "/api/applications", json={"url": f"https://example.com/stat/{i}"}
+        ).json()
+        ids.append(application["id"])
+
+    # 1 saved, 1 applied, 2 interview -> applied_or_beyond=3, reached_interview_or_beyond=2
+    client.patch(f"/api/applications/{ids[1]}/stage", json={"stage": "applied"})
+    client.patch(f"/api/applications/{ids[2]}/stage", json={"stage": "interview"})
+    client.patch(f"/api/applications/{ids[3]}/stage", json={"stage": "interview"})
+
+    res = client.get("/api/stats")
+    assert res.status_code == 200
+    stats = res.json()
+
+    assert stats["total_jobs"] == 4
+    assert stats["counts_by_stage"]["saved"] == 1
+    assert stats["counts_by_stage"]["applied"] == 1
+    assert stats["counts_by_stage"]["interview"] == 2
+    assert stats["applied_or_beyond"] == 3
+    assert stats["response_rate"] == 67  # round(2/3 * 100)
+
+
+def test_applications_csv_export(client):
+    register(client)
+    client.post("/api/applications", json={"url": "https://example.com/csv", "title": "CSV Role", "company": "Acme"})
+
+    res = client.get("/api/applications/export.csv")
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/csv")
+    assert "attachment" in res.headers["content-disposition"]
+
+    body = res.text
+    assert "CSV Role" in body
+    assert body.startswith("id,job_id,url,title")
+
+
+# --- Imports -------------------------------------------------------------
 
 
 class FakeResponse:
@@ -114,6 +324,7 @@ JOB_POSTING_HTML = """
 
 
 def test_import_from_url(client, monkeypatch):
+    register(client)
     import app.routers.imports as imports_module
 
     monkeypatch.setattr(
@@ -122,19 +333,20 @@ def test_import_from_url(client, monkeypatch):
 
     res = client.post("/api/imports/url", json={"url": "https://example.com/job/9"})
     assert res.status_code == 200
-    job = res.json()
-    assert job["title"] == "Backend Engineer"
-    assert job["company"] == "Acme"
-    assert job["location"] == "Remote"
+    application = res.json()
+    assert application["title"] == "Backend Engineer"
+    assert application["company"] == "Acme"
+    assert application["location"] == "Remote"
 
 
 def test_import_greenhouse_filters_by_keyword(client, monkeypatch):
+    register(client)
     import app.routers.imports as imports_module
 
     payload = {
         "jobs": [
-            {"title": "Backend Engineer", "location": {"name": "Remote"}, "absolute_url": "https://boards.greenhouse.io/acme/jobs/1"},
-            {"title": "Sales Rep", "location": {"name": "NYC"}, "absolute_url": "https://boards.greenhouse.io/acme/jobs/2"},
+            {"id": 111, "title": "Backend Engineer", "location": {"name": "Remote"}, "absolute_url": "https://boards.greenhouse.io/acme/jobs/1"},
+            {"id": 222, "title": "Sales Rep", "location": {"name": "NYC"}, "absolute_url": "https://boards.greenhouse.io/acme/jobs/2"},
         ]
     }
     monkeypatch.setattr(
@@ -147,13 +359,15 @@ def test_import_greenhouse_filters_by_keyword(client, monkeypatch):
     assert len(results) == 1
     assert results[0]["title"] == "Backend Engineer"
     assert results[0]["company"] == "acme"
+    assert results[0]["external_id"] == "111"
 
 
 def test_import_lever_and_bulk_import(client, monkeypatch):
+    register(client)
     import app.routers.imports as imports_module
 
     payload = [
-        {"text": "Platform Engineer", "categories": {"location": "SF"}, "hostedUrl": "https://jobs.lever.co/acme/1"},
+        {"id": "abc", "text": "Platform Engineer", "categories": {"location": "SF"}, "hostedUrl": "https://jobs.lever.co/acme/1"},
     ]
     monkeypatch.setattr(
         imports_module.httpx, "get", lambda *a, **k: FakeResponse(json_data=payload)
@@ -172,19 +386,14 @@ def test_import_lever_and_bulk_import(client, monkeypatch):
     # Re-importing the same URL dedupes rather than duplicating.
     res_bulk2 = client.post("/api/imports/bulk", json={"jobs": candidates})
     assert res_bulk2.json()[0]["id"] == saved[0]["id"]
-    assert len(client.get("/api/jobs").json()) == 1
+    assert len(client.get("/api/applications").json()) == 1
 
 
-def make_docx_bytes(paragraphs):
-    document = docx.Document()
-    for text in paragraphs:
-        document.add_paragraph(text)
-    buffer = io.BytesIO()
-    document.save(buffer)
-    return buffer.getvalue()
+# --- Resumes ---------------------------------------------------------------
 
 
 def test_resume_upload_extracts_text(client):
+    register(client)
     content = make_docx_bytes(
         ["Ada Lovelace", "Experienced Python engineer with FastAPI background."]
     )
@@ -203,6 +412,7 @@ def test_resume_upload_extracts_text(client):
 
 
 def test_resume_upload_rejects_unsupported_extension(client):
+    register(client)
     res = client.post(
         "/api/resumes",
         data={"label": "Notes"},
@@ -211,9 +421,37 @@ def test_resume_upload_rejects_unsupported_extension(client):
     assert res.status_code == 400
 
 
+def test_resume_download(client):
+    register(client)
+    content = make_docx_bytes(["Downloadable resume line."])
+    resume = client.post(
+        "/api/resumes",
+        data={"label": "My Résumé!"},
+        files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    ).json()
+
+    res = client.get(f"/api/resumes/{resume['id']}/download")
+    assert res.status_code == 200
+    assert res.content == content
+    disposition = res.headers["content-disposition"]
+    assert "attachment" in disposition
+    assert ".docx" in disposition
+    assert "My" in unquote(disposition)
+
+
+def test_resume_download_not_found(client):
+    register(client)
+    res = client.get("/api/resumes/999/download")
+    assert res.status_code == 404
+
+
+# --- Fit analysis ------------------------------------------------------
+
+
 def test_fit_analysis(client):
-    job = client.post(
-        "/api/jobs",
+    register(client)
+    application = client.post(
+        "/api/applications",
         json={
             "url": "https://example.com/job/fit",
             "description": (
@@ -230,7 +468,7 @@ def test_fit_analysis(client):
         files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
     ).json()
 
-    res = client.get(f"/api/jobs/{job['id']}/fit", params={"resume_id": resume["id"]})
+    res = client.get(f"/api/applications/{application['id']}/fit", params={"resume_id": resume["id"]})
     assert res.status_code == 200
     result = res.json()
 
@@ -241,7 +479,8 @@ def test_fit_analysis(client):
 
 
 def test_fit_analysis_missing_description(client):
-    job = client.post("/api/jobs", json={"url": "https://example.com/job/nodesc"}).json()
+    register(client)
+    application = client.post("/api/applications", json={"url": "https://example.com/job/nodesc"}).json()
     content = make_docx_bytes(["Some resume text"])
     resume = client.post(
         "/api/resumes",
@@ -249,85 +488,19 @@ def test_fit_analysis_missing_description(client):
         files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
     ).json()
 
-    res = client.get(f"/api/jobs/{job['id']}/fit", params={"resume_id": resume["id"]})
+    res = client.get(f"/api/applications/{application['id']}/fit", params={"resume_id": resume["id"]})
     assert res.status_code == 400
 
 
-def test_job_search_and_stage_filter(client):
-    client.post("/api/jobs", json={"url": "https://example.com/a", "title": "Backend Engineer", "company": "Acme"})
-    client.post("/api/jobs", json={"url": "https://example.com/b", "title": "Sales Rep", "company": "Widgets Inc"})
-    job_c = client.post(
-        "/api/jobs", json={"url": "https://example.com/c", "title": "Frontend Engineer", "company": "Acme"}
-    ).json()
-    client.patch(f"/api/jobs/{job_c['id']}/stage", json={"stage": "applied"})
-
-    res_q = client.get("/api/jobs", params={"q": "engineer"})
-    titles = {j["title"] for j in res_q.json()}
-    assert titles == {"Backend Engineer", "Frontend Engineer"}
-
-    res_company = client.get("/api/jobs", params={"q": "Acme"})
-    assert len(res_company.json()) == 2
-
-    res_stage = client.get("/api/jobs", params={"stage": "applied"})
-    assert [j["id"] for j in res_stage.json()] == [job_c["id"]]
-
-    res_combined = client.get("/api/jobs", params={"q": "engineer", "stage": "saved"})
-    assert [j["title"] for j in res_combined.json()] == ["Backend Engineer"]
-
-
-def test_job_notes_update(client):
-    job = client.post("/api/jobs", json={"url": "https://example.com/notes"}).json()
-    assert job["notes"] is None
-
-    res = client.patch(f"/api/jobs/{job['id']}/notes", json={"notes": "Talked to recruiter Jane."})
-    assert res.status_code == 200
-    assert res.json()["notes"] == "Talked to recruiter Jane."
-
-    res_missing = client.patch("/api/jobs/999/notes", json={"notes": "x"})
-    assert res_missing.status_code == 404
-
-
-def test_stats_counts_and_response_rate(client):
-    ids = []
-    for i in range(4):
-        job = client.post("/api/jobs", json={"url": f"https://example.com/stat/{i}"}).json()
-        ids.append(job["id"])
-
-    # 1 saved, 1 applied, 2 interview -> applied_or_beyond=3, reached_interview_or_beyond=2
-    client.patch(f"/api/jobs/{ids[1]}/stage", json={"stage": "applied"})
-    client.patch(f"/api/jobs/{ids[2]}/stage", json={"stage": "interview"})
-    client.patch(f"/api/jobs/{ids[3]}/stage", json={"stage": "interview"})
-
-    res = client.get("/api/stats")
-    assert res.status_code == 200
-    stats = res.json()
-
-    assert stats["total_jobs"] == 4
-    assert stats["counts_by_stage"]["saved"] == 1
-    assert stats["counts_by_stage"]["applied"] == 1
-    assert stats["counts_by_stage"]["interview"] == 2
-    assert stats["applied_or_beyond"] == 3
-    assert stats["response_rate"] == 67  # round(2/3 * 100)
-
-
-def test_jobs_csv_export(client):
-    client.post("/api/jobs", json={"url": "https://example.com/csv", "title": "CSV Role", "company": "Acme"})
-
-    res = client.get("/api/jobs/export.csv")
-    assert res.status_code == 200
-    assert res.headers["content-type"].startswith("text/csv")
-    assert "attachment" in res.headers["content-disposition"]
-
-    body = res.text
-    assert "CSV Role" in body
-    assert body.startswith("id,url,title")
+# --- AI-assisted resume tailoring --------------------------------------
 
 
 def test_tailor_requires_api_key(client, monkeypatch):
+    register(client)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
-    job = client.post(
-        "/api/jobs",
+    application = client.post(
+        "/api/applications",
         json={"url": "https://example.com/job/tailor1", "description": "Python and FastAPI role."},
     ).json()
     content = make_docx_bytes(["Experienced Python engineer."])
@@ -337,12 +510,15 @@ def test_tailor_requires_api_key(client, monkeypatch):
         files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
     ).json()
 
-    res = client.post(f"/api/jobs/{job['id']}/tailor", params={"resume_id": resume["id"]})
+    res = client.post(
+        f"/api/applications/{application['id']}/tailor", params={"resume_id": resume["id"]}
+    )
     assert res.status_code == 400
     assert "ANTHROPIC_API_KEY" in res.json()["detail"]
 
 
 def test_tailor_generates_suggestions(client, monkeypatch):
+    register(client)
     import app.routers.tailoring as tailoring_module
     from app.tailoring import BulletSuggestion
 
@@ -367,8 +543,8 @@ def test_tailor_generates_suggestions(client, monkeypatch):
         ],
     )
 
-    job = client.post(
-        "/api/jobs",
+    application = client.post(
+        "/api/applications",
         json={"url": "https://example.com/job/tailor2", "description": "Python and FastAPI role."},
     ).json()
     content = make_docx_bytes(["Experienced Python engineer."])
@@ -378,7 +554,9 @@ def test_tailor_generates_suggestions(client, monkeypatch):
         files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
     ).json()
 
-    res = client.post(f"/api/jobs/{job['id']}/tailor", params={"resume_id": resume["id"]})
+    res = client.post(
+        f"/api/applications/{application['id']}/tailor", params={"resume_id": resume["id"]}
+    )
     assert res.status_code == 200
     body = res.json()
     assert body["resume_text"] == "Experienced Python engineer."
@@ -389,7 +567,8 @@ def test_tailor_generates_suggestions(client, monkeypatch):
 
 
 def test_tailor_missing_description(client):
-    job = client.post("/api/jobs", json={"url": "https://example.com/job/tailor3"}).json()
+    register(client)
+    application = client.post("/api/applications", json={"url": "https://example.com/job/tailor3"}).json()
     content = make_docx_bytes(["Resume text"])
     resume = client.post(
         "/api/resumes",
@@ -397,13 +576,16 @@ def test_tailor_missing_description(client):
         files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
     ).json()
 
-    res = client.post(f"/api/jobs/{job['id']}/tailor", params={"resume_id": resume["id"]})
+    res = client.post(
+        f"/api/applications/{application['id']}/tailor", params={"resume_id": resume["id"]}
+    )
     assert res.status_code == 400
 
 
 def test_save_resume_version(client):
-    job = client.post(
-        "/api/jobs", json={"url": "https://example.com/job/tailor4", "title": "Backend Role"}
+    register(client)
+    application = client.post(
+        "/api/applications", json={"url": "https://example.com/job/tailor4", "title": "Backend Role"}
     ).json()
     content = make_docx_bytes(["Original resume line."])
     resume = client.post(
@@ -415,50 +597,48 @@ def test_save_resume_version(client):
     res = client.post(
         f"/api/resumes/{resume['id']}/versions",
         json={
-            "job_id": job["id"],
+            "job_id": application["job_id"],
             "final_text": "Tailored resume line for Backend Role.",
         },
     )
     assert res.status_code == 200
     version = res.json()
     assert version["base_resume_id"] == resume["id"]
-    assert version["job_id"] == job["id"]
+    assert version["job_id"] == application["job_id"]
     assert version["extracted_text"] == "Tailored resume line for Backend Role."
     assert "tailored for Backend Role" in version["label"]
 
     res_list = client.get("/api/resumes")
     resumes_by_id = {r["id"]: r for r in res_list.json()}
     assert len(resumes_by_id) == 2
-    assert resumes_by_id[version["id"]]["job_id"] == job["id"]
+    assert resumes_by_id[version["id"]]["job_id"] == application["job_id"]
     assert resumes_by_id[resume["id"]]["job_id"] is None
 
 
-def test_resume_download(client):
-    content = make_docx_bytes(["Downloadable resume line."])
+def test_save_resume_version_requires_job_in_pipeline(client):
+    register(client)
+    content = make_docx_bytes(["Original resume line."])
     resume = client.post(
         "/api/resumes",
-        data={"label": "My Résumé!"},
+        data={"label": "Base resume"},
         files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
     ).json()
 
-    res = client.get(f"/api/resumes/{resume['id']}/download")
-    assert res.status_code == 200
-    assert res.content == content
-    disposition = res.headers["content-disposition"]
-    assert "attachment" in disposition
-    assert ".docx" in disposition
-    assert "My" in unquote(disposition)
-
-
-def test_resume_download_not_found(client):
-    res = client.get("/api/resumes/999/download")
+    res = client.post(
+        f"/api/resumes/{resume['id']}/versions",
+        json={"job_id": 999, "final_text": "Tailored text."},
+    )
     assert res.status_code == 404
 
 
+# --- Profile -------------------------------------------------------------
+
+
 def test_profile_roundtrip(client):
+    register(client, email="ada3@example.com")
     res = client.put(
         "/api/profile",
-        json={"full_name": "Ada Lovelace", "email": "ada@example.com"},
+        json={"full_name": "Ada Lovelace", "email": "ada3@example.com"},
     )
     assert res.status_code == 200
     assert res.json()["full_name"] == "Ada Lovelace"
@@ -467,4 +647,4 @@ def test_profile_roundtrip(client):
     data = res_prefill.json()
     assert data["first_name"] == "Ada"
     assert data["last_name"] == "Lovelace"
-    assert data["email"] == "ada@example.com"
+    assert data["email"] == "ada3@example.com"

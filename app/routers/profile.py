@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from ..auth import get_current_user
 from ..db import db
 from ..models import ProfileIn
 
@@ -21,33 +22,39 @@ PROFILE_FIELDS = (
 
 
 @router.get("/api/profile")
-def get_profile():
+def get_profile(user: dict = Depends(get_current_user)):
     with db() as conn:
-        row = conn.execute("SELECT * FROM profile WHERE id = 1").fetchone()
+        row = conn.execute(
+            "SELECT * FROM profile WHERE user_id = ?", (user["id"],)
+        ).fetchone()
         return dict(row)
 
 
 @router.put("/api/profile")
-def put_profile(profile: ProfileIn):
+def put_profile(profile: ProfileIn, user: dict = Depends(get_current_user)):
     with db() as conn:
         conn.execute(
             f"""
             UPDATE profile SET
                 {", ".join(f"{f} = ?" for f in PROFILE_FIELDS)},
                 updated_at = datetime('now')
-            WHERE id = 1
+            WHERE user_id = ?
             """,
-            tuple(getattr(profile, f) for f in PROFILE_FIELDS),
+            tuple(getattr(profile, f) for f in PROFILE_FIELDS) + (user["id"],),
         )
-        row = conn.execute("SELECT * FROM profile WHERE id = 1").fetchone()
+        row = conn.execute(
+            "SELECT * FROM profile WHERE user_id = ?", (user["id"],)
+        ).fetchone()
         return dict(row)
 
 
 @router.get("/api/prefill")
-def get_prefill():
+def get_prefill(user: dict = Depends(get_current_user)):
     """Profile fields formatted for the extension's form-fill preview."""
     with db() as conn:
-        row = conn.execute("SELECT * FROM profile WHERE id = 1").fetchone()
+        row = conn.execute(
+            "SELECT * FROM profile WHERE user_id = ?", (user["id"],)
+        ).fetchone()
         profile = dict(row)
 
     full_name = profile.get("full_name") or ""

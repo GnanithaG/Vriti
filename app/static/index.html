@@ -7,9 +7,15 @@
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <header>
-    <h1>JobPilot</h1>
-    <p class="tagline">Your local job application copilot</p>
+  <header class="app-header">
+    <div>
+      <h1>JobPilot</h1>
+      <p class="tagline">Your local job application copilot</p>
+    </div>
+    <div class="account-bar">
+      <span id="user-email"></span>
+      <button id="logout-btn" type="button" class="secondary-btn">Log out</button>
+    </div>
   </header>
 
   <main>
@@ -108,7 +114,7 @@
           <option value="offer">offer</option>
           <option value="rejected">rejected</option>
         </select>
-        <a id="export-csv-link" class="button-link" href="/api/jobs/export.csv" download>Export CSV</a>
+        <a id="export-csv-link" class="button-link" href="/api/applications/export.csv" download>Export CSV</a>
       </div>
 
       <table id="jobs-table">

@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from ..auth import get_current_user
 from ..db import db
 from ..models import VALID_STAGES
 
@@ -7,10 +8,11 @@ router = APIRouter(prefix="/api/stats", tags=["stats"])
 
 
 @router.get("")
-def get_stats():
+def get_stats(user: dict = Depends(get_current_user)):
     with db() as conn:
         rows = conn.execute(
-            "SELECT stage, COUNT(*) AS count FROM jobs GROUP BY stage"
+            "SELECT stage, COUNT(*) AS count FROM applications WHERE user_id = ? GROUP BY stage",
+            (user["id"],),
         ).fetchall()
 
     counts_by_stage = {stage: 0 for stage in VALID_STAGES}

@@ -51,7 +51,7 @@ function renderJobs(jobs) {
       stageSelect.appendChild(opt);
     }
     stageSelect.addEventListener("change", async () => {
-      await fetch(`/api/jobs/${job.id}/stage`, {
+      await fetch(`/api/applications/${job.id}/stage`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stage: stageSelect.value }),
@@ -120,7 +120,7 @@ async function loadJobs() {
     q: jobsSearchInput.value.trim(),
     stage: jobsStageFilter.value,
   });
-  const res = await fetch(`/api/jobs?${params}`);
+  const res = await fetch(`/api/applications?${params}`);
   const jobs = await res.json();
   renderJobs(jobs);
 }
@@ -371,7 +371,7 @@ fitAnalyzeBtn.addEventListener("click", async () => {
   fitResults.innerHTML = '<p class="hint">Analyzing…</p>';
   try {
     const res = await fetch(
-      `/api/jobs/${currentFitJobId}/fit?resume_id=${resumeId}`
+      `/api/applications/${currentFitJobId}/fit?resume_id=${resumeId}`
     );
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -416,7 +416,7 @@ notesSaveBtn.addEventListener("click", async () => {
   if (!currentNotesJobId) return;
   notesStatus.textContent = "Saving…";
   try {
-    const res = await fetch(`/api/jobs/${currentNotesJobId}/notes`, {
+    const res = await fetch(`/api/applications/${currentNotesJobId}/notes`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ notes: notesTextarea.value }),
@@ -470,13 +470,15 @@ const tailorVersionLabel = document.getElementById("tailor-version-label");
 const tailorSaveBtn = document.getElementById("tailor-save-btn");
 const tailorSaveStatus = document.getElementById("tailor-save-status");
 
-let currentTailorJobId = null;
+let currentTailorApplicationId = null;
+let currentTailorCatalogJobId = null;
 let tailorBaseResumeText = "";
 let tailorBaseResumeId = null;
 let tailorDecisions = []; // [{ original, editedText, accepted }]
 
 function openTailorPanel(job) {
-  currentTailorJobId = job.id;
+  currentTailorApplicationId = job.id;
+  currentTailorCatalogJobId = job.job_id;
   tailorPanelJobTitle.textContent = job.title || job.url;
   tailorStatus.textContent = "";
   tailorSuggestionsEl.innerHTML = "";
@@ -544,7 +546,7 @@ function renderSuggestionCard(suggestion, index) {
 }
 
 tailorGenerateBtn.addEventListener("click", async () => {
-  if (!currentTailorJobId) return;
+  if (!currentTailorApplicationId) return;
   const resumeId = tailorResumeSelect.value;
   if (!resumeId) {
     tailorStatus.textContent = "Upload a resume first.";
@@ -557,7 +559,7 @@ tailorGenerateBtn.addEventListener("click", async () => {
 
   try {
     const res = await fetch(
-      `/api/jobs/${currentTailorJobId}/tailor?resume_id=${resumeId}`,
+      `/api/applications/${currentTailorApplicationId}/tailor?resume_id=${resumeId}`,
       { method: "POST" }
     );
     if (!res.ok) {
@@ -590,7 +592,7 @@ tailorGenerateBtn.addEventListener("click", async () => {
 });
 
 tailorSaveBtn.addEventListener("click", async () => {
-  if (!currentTailorJobId || !tailorBaseResumeId) return;
+  if (!currentTailorCatalogJobId || !tailorBaseResumeId) return;
 
   let finalText = tailorBaseResumeText;
   for (const decision of tailorDecisions) {
@@ -606,7 +608,7 @@ tailorSaveBtn.addEventListener("click", async () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        job_id: currentTailorJobId,
+        job_id: currentTailorCatalogJobId,
         final_text: finalText,
         label: tailorVersionLabel.value.trim() || null,
       }),
@@ -623,7 +625,29 @@ tailorSaveBtn.addEventListener("click", async () => {
   }
 });
 
-loadProfile();
-loadJobs();
-loadResumes();
-loadStats();
+// --- Auth gate -------------------------------------------------------------
+
+const userEmailEl = document.getElementById("user-email");
+const logoutBtn = document.getElementById("logout-btn");
+
+logoutBtn.addEventListener("click", async () => {
+  await fetch("/api/auth/logout", { method: "POST" });
+  window.location.href = "/login";
+});
+
+async function bootstrap() {
+  const meRes = await fetch("/api/auth/me");
+  if (!meRes.ok) {
+    window.location.href = "/login";
+    return;
+  }
+  const me = await meRes.json();
+  userEmailEl.textContent = me.email;
+
+  loadProfile();
+  loadJobs();
+  loadResumes();
+  loadStats();
+}
+
+bootstrap();

@@ -3,9 +3,15 @@ const API_BASE = "http://127.0.0.1:8000";
 const statusEl = document.getElementById("status");
 const captureBtn = document.getElementById("capture-btn");
 const prefillBtn = document.getElementById("prefill-btn");
+const loggedOutNotice = document.getElementById("logged-out-notice");
+const mainActions = document.getElementById("main-actions");
 
 function setStatus(text) {
   statusEl.textContent = text;
+}
+
+function apiFetch(path, options = {}) {
+  return fetch(`${API_BASE}${path}`, { ...options, credentials: "include" });
 }
 
 async function getActiveTab() {
@@ -26,12 +32,16 @@ captureBtn.addEventListener("click", async () => {
       type: "JOBPILOT_CAPTURE",
     });
 
-    const res = await fetch(`${API_BASE}/api/jobs`, {
+    const res = await apiFetch("/api/applications", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, ...job }),
     });
 
+    if (res.status === 401) {
+      setStatus("Your JobPilot session expired. Please log in again.");
+      return;
+    }
     if (!res.ok) throw new Error(`API returned ${res.status}`);
     const saved = await res.json();
     setStatus(`Saved: ${saved.title || saved.url}`);
@@ -47,17 +57,17 @@ async function showResumeReminderIfAny() {
     const tab = await getActiveTab();
     if (!tab?.url) return;
 
-    const jobsRes = await fetch(`${API_BASE}/api/jobs`);
-    if (!jobsRes.ok) return;
-    const jobs = await jobsRes.json();
-    const job = jobs.find((j) => j.url === tab.url);
-    if (!job) return;
+    const applicationsRes = await apiFetch("/api/applications");
+    if (!applicationsRes.ok) return;
+    const applications = await applicationsRes.json();
+    const application = applications.find((a) => a.url === tab.url);
+    if (!application) return;
 
-    const resumesRes = await fetch(`${API_BASE}/api/resumes`);
+    const resumesRes = await apiFetch("/api/resumes");
     if (!resumesRes.ok) return;
     const resumes = await resumesRes.json();
     const tailored = resumes
-      .filter((r) => r.job_id === job.id)
+      .filter((r) => r.job_id === application.job_id)
       .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     if (tailored.length === 0) return;
 
@@ -76,7 +86,11 @@ prefillBtn.addEventListener("click", async () => {
   prefillBtn.disabled = true;
   setStatus("Loading your profile…");
   try {
-    const res = await fetch(`${API_BASE}/api/prefill`);
+    const res = await apiFetch("/api/prefill");
+    if (res.status === 401) {
+      setStatus("Your JobPilot session expired. Please log in again.");
+      return;
+    }
     if (!res.ok) throw new Error(`API returned ${res.status}`);
     const profile = await res.json();
 
@@ -95,4 +109,24 @@ prefillBtn.addEventListener("click", async () => {
   }
 });
 
-showResumeReminderIfAny();
+async function init() {
+  let loggedIn = false;
+  try {
+    const res = await apiFetch("/api/auth/me");
+    loggedIn = res.ok;
+  } catch {
+    // JobPilot isn't reachable at all — treat like logged out; button
+    // clicks will surface the real "is it running locally?" error.
+  }
+
+  if (!loggedIn) {
+    loggedOutNotice.classList.add("visible");
+    mainActions.classList.add("hidden");
+    return;
+  }
+
+  mainActions.classList.remove("hidden");
+  showResumeReminderIfAny();
+}
+
+init();

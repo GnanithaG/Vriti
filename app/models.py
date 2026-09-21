@@ -6,6 +6,16 @@ from pydantic import BaseModel
 VALID_STAGES = ("saved", "applied", "interview", "offer", "rejected")
 
 
+class RegisterIn(BaseModel):
+    email: str
+    password: str
+
+
+class LoginIn(BaseModel):
+    email: str
+    password: str
+
+
 class JobCreate(BaseModel):
     url: str
     title: Optional[str] = None
@@ -14,25 +24,12 @@ class JobCreate(BaseModel):
     description: Optional[str] = None
 
 
-class JobStageUpdate(BaseModel):
+class ApplicationStageUpdate(BaseModel):
     stage: str
 
 
-class JobNotesUpdate(BaseModel):
+class ApplicationNotesUpdate(BaseModel):
     notes: str
-
-
-class JobOut(BaseModel):
-    id: int
-    url: str
-    title: Optional[str]
-    company: Optional[str]
-    location: Optional[str]
-    description: Optional[str]
-    stage: str
-    notes: Optional[str]
-    created_at: str
-    updated_at: str
 
 
 class ProfileIn(BaseModel):
@@ -62,6 +59,7 @@ class BoardCandidate(BaseModel):
     title: Optional[str] = None
     company: Optional[str] = None
     location: Optional[str] = None
+    external_id: Optional[str] = None
 
 
 class BulkImportIn(BaseModel):

@@ -1,9 +1,11 @@
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
-from ..db import db, upsert_job
+from ..auth import get_current_user
+from ..db import db, upsert_application, upsert_job
 from ..models import BoardCandidate, BulkImportIn, UrlImportIn
 from ..parsing import parse_job_posting_html
+from .applications import get_application_row
 
 router = APIRouter(prefix="/api/imports", tags=["imports"])
 
@@ -12,7 +14,7 @@ REQUEST_TIMEOUT = 10.0
 
 
 @router.post("/url")
-def import_from_url(payload: UrlImportIn):
+def import_from_url(payload: UrlImportIn, user: dict = Depends(get_current_user)):
     try:
         res = httpx.get(
             payload.url,
@@ -28,18 +30,21 @@ def import_from_url(payload: UrlImportIn):
 
     job = parse_job_posting_html(res.text)
     with db() as conn:
-        return upsert_job(
+        catalog_job = upsert_job(
             conn,
             payload.url,
             title=job.get("title"),
             company=job.get("company"),
             location=job.get("location"),
             description=job.get("description"),
+            source="url",
         )
+        application = upsert_application(conn, user["id"], catalog_job["id"])
+        return get_application_row(conn, application["id"], user["id"])
 
 
 @router.get("/greenhouse", response_model=list[BoardCandidate])
-def search_greenhouse(board: str, keyword: str = ""):
+def search_greenhouse(board: str, keyword: str = "", user: dict = Depends(get_current_user)):
     try:
         res = httpx.get(
             f"https://boards-api.greenhouse.io/v1/boards/{board}/jobs",
@@ -65,13 +70,14 @@ def search_greenhouse(board: str, keyword: str = ""):
                 title=title or None,
                 company=board,
                 location=(job.get("location") or {}).get("name"),
+                external_id=str(job.get("id")) if job.get("id") is not None else None,
             )
         )
     return candidates
 
 
 @router.get("/lever", response_model=list[BoardCandidate])
-def search_lever(board: str, keyword: str = ""):
+def search_lever(board: str, keyword: str = "", user: dict = Depends(get_current_user)):
     try:
         res = httpx.get(
             f"https://api.lever.co/v0/postings/{board}",
@@ -98,21 +104,29 @@ def search_lever(board: str, keyword: str = ""):
                 title=title or None,
                 company=board,
                 location=(job.get("categories") or {}).get("location"),
+                external_id=str(job.get("id")) if job.get("id") is not None else None,
             )
         )
     return candidates
 
 
 @router.post("/bulk")
-def import_bulk(payload: BulkImportIn):
+def import_bulk(payload: BulkImportIn, user: dict = Depends(get_current_user)):
     with db() as conn:
-        return [
-            upsert_job(
+        rows = []
+        for job in payload.jobs:
+            source = "greenhouse" if "greenhouse.io" in job.url else (
+                "lever" if "lever.co" in job.url else "manual"
+            )
+            catalog_job = upsert_job(
                 conn,
                 job.url,
                 title=job.title,
                 company=job.company,
                 location=job.location,
+                source=source,
+                source_id=job.external_id,
             )
-            for job in payload.jobs
-        ]
+            application = upsert_application(conn, user["id"], catalog_job["id"])
+            rows.append(get_application_row(conn, application["id"], user["id"]))
+        return rows

@@ -1,34 +1,34 @@
 import uuid
 
 import anthropic
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from ..auth import get_current_user
 from ..db import RESUMES_DIR, db
 from ..fit import analyze_fit
 from ..tailoring import TailoringUnavailable, generate_suggestions
+from .applications import get_application_row
 
 router = APIRouter(tags=["tailoring"])
 
 
-def _get_job_and_resume(conn, job_id: int, resume_id: int):
-    job = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
-    if not job:
-        raise HTTPException(status_code=404, detail="job not found")
-
-    resume = conn.execute("SELECT * FROM resumes WHERE id = ?", (resume_id,)).fetchone()
+def _get_owned_resume(conn, resume_id: int, user_id: int):
+    resume = conn.execute(
+        "SELECT * FROM resumes WHERE id = ? AND user_id = ?", (resume_id, user_id)
+    ).fetchone()
     if not resume:
         raise HTTPException(status_code=404, detail="resume not found")
+    return resume
 
-    return job, resume
 
-
-@router.post("/api/jobs/{job_id}/tailor")
-def tailor_resume(job_id: int, resume_id: int):
+@router.post("/api/applications/{application_id}/tailor")
+def tailor_resume(application_id: int, resume_id: int, user: dict = Depends(get_current_user)):
     with db() as conn:
-        job, resume = _get_job_and_resume(conn, job_id, resume_id)
+        application = get_application_row(conn, application_id, user["id"])
+        resume = _get_owned_resume(conn, resume_id, user["id"])
 
-    description = job["description"] or ""
+    description = application["description"] or ""
     if not description.strip():
         raise HTTPException(
             status_code=400, detail="This job has no description to tailor against"
@@ -71,36 +71,49 @@ def tailor_resume(job_id: int, resume_id: int):
 
 
 class SaveVersionIn(BaseModel):
-    job_id: int
+    job_id: int  # catalog job id (resumes.job_id), not the application id
     final_text: str
     label: str | None = None
 
 
 @router.post("/api/resumes/{resume_id}/versions")
-def save_resume_version(resume_id: int, payload: SaveVersionIn):
+def save_resume_version(
+    resume_id: int, payload: SaveVersionIn, user: dict = Depends(get_current_user)
+):
     with db() as conn:
-        base = conn.execute("SELECT * FROM resumes WHERE id = ?", (resume_id,)).fetchone()
-        if not base:
-            raise HTTPException(status_code=404, detail="resume not found")
+        base = _get_owned_resume(conn, resume_id, user["id"])
 
-        job = conn.execute("SELECT * FROM jobs WHERE id = ?", (payload.job_id,)).fetchone()
-        if not job:
-            raise HTTPException(status_code=404, detail="job not found")
+        # The job must actually be in this user's own pipeline — tailoring
+        # for a job you haven't saved isn't a thing.
+        application = conn.execute(
+            """
+            SELECT applications.*, jobs.title AS job_title, jobs.url AS job_url
+            FROM applications JOIN jobs ON jobs.id = applications.job_id
+            WHERE applications.user_id = ? AND applications.job_id = ?
+            """,
+            (user["id"], payload.job_id),
+        ).fetchone()
+        if not application:
+            raise HTTPException(status_code=404, detail="job not found in your pipeline")
 
         if not payload.final_text.strip():
             raise HTTPException(status_code=400, detail="final_text is empty")
 
-        label = payload.label or f"{base['label']} — tailored for {job['title'] or job['url']}"
+        label = (
+            payload.label
+            or f"{base['label']} — tailored for {application['job_title'] or application['job_url']}"
+        )
 
         stored_name = f"{uuid.uuid4().hex}.txt"
         (RESUMES_DIR / stored_name).write_text(payload.final_text, encoding="utf-8")
 
         cur = conn.execute(
             """
-            INSERT INTO resumes (label, file_path, extracted_text, base_resume_id, job_id)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO resumes (user_id, label, file_path, extracted_text, base_resume_id, job_id)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
+                user["id"],
                 label,
                 str(RESUMES_DIR / stored_name),
                 payload.final_text,
