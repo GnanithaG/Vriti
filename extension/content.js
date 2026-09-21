@@ -106,6 +106,47 @@ function extractJobPosting() {
 
 // --- Prefill preview -------------------------------------------------
 
+// Known field selectors for major ATSs — tried before the generic
+// label-guessing heuristics below, since exact selectors are more
+// reliable than pattern-matching on labels/placeholders. Same
+// "never overwrite / skip sensitive / never submit" rules still apply to
+// every field found this way.
+const SITE_HINTS = [
+  {
+    match: /(^|\.)greenhouse\.io$/,
+    fields: {
+      first_name: ['input[name="job_application[first_name]"]', "#first_name"],
+      last_name: ['input[name="job_application[last_name]"]', "#last_name"],
+      full_name: ["#name"],
+      email: ['input[name="job_application[email]"]', "#email"],
+      phone: ['input[name="job_application[phone]"]', "#phone"],
+      linkedin_url: ['input[name="job_application[urls][LinkedIn]"]'],
+      website_url: ['input[name="job_application[urls][Portfolio]"]'],
+      location: [
+        'input[name="job_application[location]"]',
+        "#candidate-location input",
+      ],
+    },
+  },
+  {
+    match: /(^|\.)lever\.co$/,
+    fields: {
+      full_name: ['input[name="name"]'],
+      email: ['input[name="email"]'],
+      phone: ['input[name="phone"]'],
+      linkedin_url: ['input[name="urls[LinkedIn]"]'],
+      website_url: ['input[name="urls[Portfolio]"]', 'input[name="urls[GitHub]"]'],
+      location: ['input[name="location"]'],
+    },
+  },
+];
+
+function getSiteHints() {
+  const host = window.location.hostname;
+  const site = SITE_HINTS.find((s) => s.match.test(host));
+  return site ? site.fields : null;
+}
+
 const FIELD_MATCHERS = [
   { key: "email", pattern: /\bemail\b/i },
   { key: "phone", pattern: /\bphone|\bmobile|\btel\b/i },
@@ -165,36 +206,98 @@ function highlight(field) {
   field.style.backgroundColor = "#eaf1ff";
 }
 
+function tryFillField(field, key, profile, filledFields) {
+  if (filledFields.has(field)) return false;
+  if (!isFillableTextField(field)) return false;
+  if (field.value && field.value.trim() !== "") return false; // never overwrite
+  if (isSensitiveField(field)) return false; // blocklist wins
+
+  const value = profile[key];
+  if (!value) return false;
+
+  field.value = value;
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+  field.dispatchEvent(new Event("change", { bubbles: true }));
+  highlight(field);
+  filledFields.add(field);
+  return true;
+}
+
 /**
  * Fills ordinary contact fields from `profile` (as returned by
  * GET /api/prefill). Returns the number of fields filled.
  *
  * Never overwrites a field that already has a value, never touches
  * anything matching SENSITIVE_FIELD_BLOCKLIST, and never interacts with
- * submit/apply buttons.
+ * submit/apply buttons. Safe to call more than once on the same page
+ * (e.g. after a multi-step form reveals new fields) — already-filled
+ * fields are simply skipped.
  */
 function prefillPreview(profile) {
-  const fields = document.querySelectorAll("input, textarea");
+  const filledFields = new Set();
   let filled = 0;
 
-  for (const field of fields) {
+  const siteFields = getSiteHints();
+  if (siteFields) {
+    for (const [key, selectors] of Object.entries(siteFields)) {
+      for (const selector of selectors) {
+        const field = document.querySelector(selector);
+        if (field && tryFillField(field, key, profile, filledFields)) {
+          filled += 1;
+          break; // first matching selector for this key wins
+        }
+      }
+    }
+  }
+
+  for (const field of document.querySelectorAll("input, textarea")) {
+    if (filledFields.has(field)) continue;
     if (!isFillableTextField(field)) continue;
     if (field.value && field.value.trim() !== "") continue; // never overwrite
     if (isSensitiveField(field)) continue; // blocklist wins
 
     const key = matchProfileKey(field);
     if (!key) continue;
-    const value = profile[key];
-    if (!value) continue;
-
-    field.value = value;
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-    field.dispatchEvent(new Event("change", { bubbles: true }));
-    highlight(field);
-    filled += 1;
+    if (tryFillField(field, key, profile, filledFields)) {
+      filled += 1;
+    }
   }
 
   return filled;
+}
+
+// --- Multi-step forms --------------------------------------------------
+//
+// Some ATS forms (Workday, Greenhouse, Lever) reveal new fields only after
+// the person clicks "Next" themselves — we never click it for them. Once a
+// prefill has run, watch for newly-added form fields and re-run prefill
+// automatically so step 2+ gets the same treatment without the person
+// reopening the popup.
+
+let lastPrefillProfile = null;
+let multiStepObserver = null;
+let rerunTimer = null;
+
+function scheduleRerun() {
+  if (!lastPrefillProfile) return;
+  clearTimeout(rerunTimer);
+  rerunTimer = setTimeout(() => prefillPreview(lastPrefillProfile), 400);
+}
+
+function hasFormField(node) {
+  if (node.nodeType !== Node.ELEMENT_NODE) return false;
+  return node.matches?.("input, textarea") || !!node.querySelector?.("input, textarea");
+}
+
+function ensureMultiStepObserver() {
+  if (multiStepObserver) return;
+  multiStepObserver = new MutationObserver((mutations) => {
+    const addedFormField = mutations.some((mutation) =>
+      Array.from(mutation.addedNodes).some(hasFormField)
+    );
+    if (addedFormField) scheduleRerun();
+  });
+  multiStepObserver.observe(document.body, { childList: true, subtree: true });
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -203,7 +306,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
   if (message.type === "JOBPILOT_PREFILL") {
-    const filled = prefillPreview(message.profile || {});
+    lastPrefillProfile = message.profile || {};
+    ensureMultiStepObserver();
+    const filled = prefillPreview(lastPrefillProfile);
     sendResponse({ filled });
     return true;
   }

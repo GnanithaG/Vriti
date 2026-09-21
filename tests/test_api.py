@@ -1,5 +1,6 @@
 import importlib
 import io
+from urllib.parse import unquote
 
 import docx
 import httpx
@@ -426,7 +427,32 @@ def test_save_resume_version(client):
     assert "tailored for Backend Role" in version["label"]
 
     res_list = client.get("/api/resumes")
-    assert len(res_list.json()) == 2
+    resumes_by_id = {r["id"]: r for r in res_list.json()}
+    assert len(resumes_by_id) == 2
+    assert resumes_by_id[version["id"]]["job_id"] == job["id"]
+    assert resumes_by_id[resume["id"]]["job_id"] is None
+
+
+def test_resume_download(client):
+    content = make_docx_bytes(["Downloadable resume line."])
+    resume = client.post(
+        "/api/resumes",
+        data={"label": "My Résumé!"},
+        files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    ).json()
+
+    res = client.get(f"/api/resumes/{resume['id']}/download")
+    assert res.status_code == 200
+    assert res.content == content
+    disposition = res.headers["content-disposition"]
+    assert "attachment" in disposition
+    assert ".docx" in disposition
+    assert "My" in unquote(disposition)
+
+
+def test_resume_download_not_found(client):
+    res = client.get("/api/resumes/999/download")
+    assert res.status_code == 404
 
 
 def test_profile_roundtrip(client):

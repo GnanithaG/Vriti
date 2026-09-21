@@ -25,11 +25,30 @@
     button:disabled { opacity: 0.6; cursor: default; }
     #status { font-size: 12px; color: #444; min-height: 32px; }
     a { font-size: 11px; color: #2f6feb; }
+    #resume-reminder {
+      display: none;
+      margin: 4px 0 12px;
+      padding: 8px 10px;
+      background: #eaf1ff;
+      border-radius: 6px;
+      font-size: 11px;
+    }
+    #resume-reminder.visible { display: block; }
+    #resume-reminder .label { font-weight: 600; margin-bottom: 4px; }
+    #resume-reminder a { display: inline-block; font-size: 11px; }
   </style>
 </head>
 <body>
   <h1>JobPilot</h1>
   <p class="tagline">You always press Submit. JobPilot never does.</p>
+
+  <div id="resume-reminder">
+    <div class="label">Tailored resume for this job:</div>
+    <span id="resume-reminder-name"></span> —
+    <a id="resume-reminder-link" target="_blank">Download</a>
+    <div style="color:#666; margin-top:4px;">Attach it yourself — browsers won't let extensions upload files.</div>
+  </div>
+
   <button id="capture-btn">Capture this job</button>
   <button id="prefill-btn">Preview prefill on this page</button>
   <div id="status"></div>

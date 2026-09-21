@@ -1,10 +1,14 @@
+import re
 import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 
 from ..db import RESUMES_DIR, db
 from ..text_extraction import UnsupportedResumeFormat, extract_text
+
+_UNSAFE_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|]+')
 
 router = APIRouter(prefix="/api/resumes", tags=["resumes"])
 
@@ -42,7 +46,10 @@ async def upload_resume(label: str = Form(...), file: UploadFile = File(...)):
 def list_resumes():
     with db() as conn:
         rows = conn.execute(
-            "SELECT id, label, base_resume_id, created_at FROM resumes ORDER BY created_at DESC"
+            """
+            SELECT id, label, base_resume_id, job_id, created_at
+            FROM resumes ORDER BY created_at DESC
+            """
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -54,3 +61,19 @@ def get_resume(resume_id: int):
         if not row:
             raise HTTPException(status_code=404, detail="resume not found")
         return dict(row)
+
+
+@router.get("/{resume_id}/download")
+def download_resume(resume_id: int):
+    with db() as conn:
+        row = conn.execute("SELECT * FROM resumes WHERE id = ?", (resume_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="resume not found")
+
+    file_path = Path(row["file_path"])
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="resume file is missing on disk")
+
+    safe_label = _UNSAFE_FILENAME_CHARS.sub("_", row["label"]).strip() or "resume"
+    filename = f"{safe_label}{file_path.suffix}"
+    return FileResponse(file_path, filename=filename)

@@ -42,6 +42,36 @@ captureBtn.addEventListener("click", async () => {
   }
 });
 
+async function showResumeReminderIfAny() {
+  try {
+    const tab = await getActiveTab();
+    if (!tab?.url) return;
+
+    const jobsRes = await fetch(`${API_BASE}/api/jobs`);
+    if (!jobsRes.ok) return;
+    const jobs = await jobsRes.json();
+    const job = jobs.find((j) => j.url === tab.url);
+    if (!job) return;
+
+    const resumesRes = await fetch(`${API_BASE}/api/resumes`);
+    if (!resumesRes.ok) return;
+    const resumes = await resumesRes.json();
+    const tailored = resumes
+      .filter((r) => r.job_id === job.id)
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+    if (tailored.length === 0) return;
+
+    const latest = tailored[0];
+    document.getElementById("resume-reminder-name").textContent = latest.label;
+    document.getElementById(
+      "resume-reminder-link"
+    ).href = `${API_BASE}/api/resumes/${latest.id}/download`;
+    document.getElementById("resume-reminder").classList.add("visible");
+  } catch {
+    // Best-effort — the rest of the popup still works without this.
+  }
+}
+
 prefillBtn.addEventListener("click", async () => {
   prefillBtn.disabled = true;
   setStatus("Loading your profile…");
@@ -64,3 +94,5 @@ prefillBtn.addEventListener("click", async () => {
     prefillBtn.disabled = false;
   }
 });
+
+showResumeReminderIfAny();
