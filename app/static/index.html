@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vriti</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark">V</div>
+      <div>
+        <h1>Vriti</h1>
+        <p class="tagline">Your local job application copilot</p>
+      </div>
+    </div>
+    <div class="account-bar">
+      <nav class="top-nav">
+        <a href="/careers">Careers</a>
+        <a href="/" class="active">Pipeline</a>
+      </nav>
+      <div class="account-chip">
+        <span id="user-avatar" class="avatar"></span>
+        <span id="user-email"></span>
+      </div>
+      <button id="logout-btn" type="button" class="secondary-btn">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="profile-section">
+      <h2>Profile</h2>
+      <p class="hint">Used to prefill safe, ordinary contact fields on job application forms.</p>
+      <form id="profile-form">
+        <div class="grid">
+          <label>Full name <input type="text" name="full_name" /></label>
+          <label>Email <input type="email" name="email" /></label>
+          <label>Phone <input type="text" name="phone" /></label>
+          <label>Location <input type="text" name="location" placeholder="City, State" /></label>
+          <label>LinkedIn URL <input type="url" name="linkedin_url" /></label>
+          <label>Website / portfolio URL <input type="url" name="website_url" /></label>
+          <label>Address <input type="text" name="address" /></label>
+          <label>City <input type="text" name="city" /></label>
+          <label>State <input type="text" name="state" /></label>
+          <label>Postal code <input type="text" name="postal_code" /></label>
+          <label>Country <input type="text" name="country" /></label>
+        </div>
+        <button type="submit">Save profile</button>
+        <span id="profile-status" class="status"></span>
+      </form>
+    </section>
+
+    <section id="import-section">
+      <h2>Import jobs</h2>
+
+      <div class="import-block">
+        <h3>Paste a job URL</h3>
+        <form id="url-import-form" class="inline-form">
+          <input type="url" id="url-import-input" placeholder="https://company.com/careers/role" required />
+          <button type="submit">Import</button>
+        </form>
+        <span id="url-import-status" class="status"></span>
+      </div>
+
+      <div class="import-block">
+        <h3>Import from a Greenhouse or Lever board</h3>
+        <form id="board-search-form" class="inline-form">
+          <select id="board-type">
+            <option value="greenhouse">Greenhouse</option>
+            <option value="lever">Lever</option>
+          </select>
+          <input type="text" id="board-company" placeholder="company slug (e.g. stripe)" required />
+          <input type="text" id="board-keyword" placeholder="keyword filter (optional)" />
+          <button type="submit">Search</button>
+        </form>
+        <span id="board-search-status" class="status"></span>
+
+        <div id="board-results" class="hidden">
+          <table id="board-results-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Title</th>
+                <th>Location</th>
+              </tr>
+            </thead>
+            <tbody id="board-results-tbody"></tbody>
+          </table>
+          <button id="import-selected-btn" type="button">Import selected</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="resumes-section">
+      <h2>Resumes</h2>
+      <form id="resume-upload-form" class="inline-form">
+        <input type="text" id="resume-label-input" placeholder="Label (e.g. Software Engineer resume)" required />
+        <input type="file" id="resume-file-input" accept=".pdf,.docx" required />
+        <button type="submit">Upload</button>
+      </form>
+      <span id="resume-upload-status" class="status"></span>
+
+      <ul id="resumes-list" class="plain-list">
+        <li class="empty">No resumes uploaded yet.</li>
+      </ul>
+    </section>
+
+    <section id="stats-section">
+      <h2>Stats</h2>
+      <div id="stats-cards"></div>
+    </section>
+
+    <section id="jobs-section">
+      <h2>Jobs</h2>
+
+      <div class="inline-form">
+        <input type="search" id="jobs-search-input" placeholder="Search title or company…" />
+        <select id="jobs-stage-filter">
+          <option value="">All stages</option>
+          <option value="saved">saved</option>
+          <option value="applied">applied</option>
+          <option value="interview">interview</option>
+          <option value="offer">offer</option>
+          <option value="rejected">rejected</option>
+        </select>
+        <select id="jobs-employment-filter">
+          <option value="">All types</option>
+          <option value="full_time">Full-time</option>
+          <option value="contract">Contract</option>
+          <option value="part_time">Part-time</option>
+          <option value="internship">Internship</option>
+        </select>
+        <select id="jobs-contract-filter">
+          <option value="">Any contract type</option>
+          <option value="w2">W2</option>
+          <option value="c2c">C2C</option>
+          <option value="c2h">C2H</option>
+        </select>
+        <a id="export-csv-link" class="button-link" href="/api/applications/export.csv" download>Export CSV</a>
+      </div>
+
+      <table id="jobs-table">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Company</th>
+            <th>Location</th>
+            <th>Type</th>
+            <th>Stage</th>
+            <th>Status</th>
+            <th>Link</th>
+            <th>Fit</th>
+            <th>Notes</th>
+            <th>Tailor</th>
+          </tr>
+        </thead>
+        <tbody id="jobs-tbody">
+          <tr><td colspan="10" class="empty">No jobs saved yet. Use the extension to capture one.</td></tr>
+        </tbody>
+      </table>
+
+      <div id="fit-panel" class="hidden">
+        <h3>Fit: <span id="fit-panel-job-title"></span></h3>
+        <div class="inline-form">
+          <select id="fit-resume-select"></select>
+          <button id="fit-analyze-btn" type="button">Analyze</button>
+        </div>
+        <div id="fit-results"></div>
+      </div>
+
+      <div id="notes-panel" class="hidden">
+        <h3>Notes: <span id="notes-panel-job-title"></span></h3>
+        <textarea id="notes-textarea" rows="4" placeholder="Interview prep, contact names, etc."></textarea>
+        <div>
+          <button id="notes-save-btn" type="button">Save notes</button>
+          <span id="notes-status" class="status"></span>
+        </div>
+      </div>
+
+      <div id="tailor-panel" class="hidden">
+        <h3>Tailor resume for: <span id="tailor-panel-job-title"></span></h3>
+        <p class="hint">
+          AI-assisted, evidence-based rewrites — nothing here is applied until you accept it below.
+          Requires <code>ANTHROPIC_API_KEY</code> in a local <code>.env</code>.
+        </p>
+        <div class="inline-form">
+          <select id="tailor-resume-select"></select>
+          <button id="tailor-generate-btn" type="button">Generate suggestions</button>
+        </div>
+        <span id="tailor-status" class="status"></span>
+
+        <div id="tailor-suggestions"></div>
+
+        <div id="tailor-save-block" class="hidden">
+          <div class="inline-form">
+            <input type="text" id="tailor-version-label" placeholder="Label for this version (optional)" />
+            <button id="tailor-save-btn" type="button">Save as new resume version</button>
+          </div>
+          <span id="tailor-save-status" class="status"></span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

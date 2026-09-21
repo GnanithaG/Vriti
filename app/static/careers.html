@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Careers — Vriti</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark">V</div>
+      <div>
+        <h1>Vriti</h1>
+        <p class="tagline">Upload a resume, see how it matches your saved roles.</p>
+      </div>
+    </div>
+    <div class="account-bar">
+      <nav class="top-nav">
+        <a href="/careers" class="active">Careers</a>
+        <a href="/">Pipeline</a>
+      </nav>
+      <div class="account-chip">
+        <span id="user-avatar" class="avatar"></span>
+        <span id="user-email"></span>
+      </div>
+      <button id="logout-btn" type="button" class="secondary-btn">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="onboarding-section" class="hidden">
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 16V4M12 4 7 9M12 4l5 5" />
+            <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+          </svg>
+        </div>
+        <h3>Upload your resume to get started</h3>
+        <p>
+          Nothing else on this page works until you upload a resume — Vriti matches it against
+          every job you've imported.
+        </p>
+      </div>
+      <form id="onboarding-upload-form" class="inline-form">
+        <input type="text" id="onboarding-label-input" placeholder="Label (e.g. Software Engineer resume)" required />
+        <input type="file" id="onboarding-file-input" accept=".pdf,.docx" required />
+        <button type="submit">Upload</button>
+      </form>
+      <span id="onboarding-status" class="status"></span>
+    </section>
+
+    <section id="matches-section" class="hidden">
+      <h2>Job matches</h2>
+
+      <div class="inline-form">
+        <select id="resume-select"></select>
+        <select id="careers-employment-filter">
+          <option value="">All types</option>
+          <option value="full_time">Full-time</option>
+          <option value="contract">Contract</option>
+          <option value="part_time">Part-time</option>
+          <option value="internship">Internship</option>
+        </select>
+        <select id="careers-contract-filter">
+          <option value="">Any contract type</option>
+          <option value="w2">W2</option>
+          <option value="c2c">C2C</option>
+          <option value="c2h">C2H</option>
+        </select>
+        <button id="upload-another-btn" type="button" class="secondary-btn">Upload another resume</button>
+      </div>
+
+      <form id="another-upload-form" class="inline-form hidden">
+        <input type="text" id="another-label-input" placeholder="Label (e.g. Data Science resume)" required />
+        <input type="file" id="another-file-input" accept=".pdf,.docx" required />
+        <button type="submit">Upload</button>
+      </form>
+      <span id="matches-status" class="status"></span>
+
+      <div id="thin-catalog-hint" class="hidden">
+        <p class="hint">
+          Not many roles to match against yet.
+          <a href="/#import-section">Import more roles →</a>
+        </p>
+      </div>
+
+      <div id="matches-list"></div>
+    </section>
+  </main>
+
+  <script src="/careers.js"></script>
+</body>
+</html>

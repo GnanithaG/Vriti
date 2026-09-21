@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Register — Vriti</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    body {
+      max-width: none;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .auth-shell { width: 100%; max-width: 380px; }
+    .auth-brand { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 28px; text-align: center; }
+    .auth-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-pop);
+      padding: 28px 28px 24px;
+    }
+    .auth-card form { display: flex; flex-direction: column; gap: 16px; }
+    .auth-card button { width: 100%; padding: 11px; font-size: 0.95rem; margin-top: 4px; }
+    .auth-card .hint { margin: -8px 0 0; }
+    .auth-footer { margin-top: 20px; font-size: 0.88rem; color: var(--text-muted); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="auth-shell">
+    <div class="auth-brand">
+      <div class="brand-mark">V</div>
+      <div>
+        <h1>Create your account</h1>
+        <p class="tagline">Get started with Vriti.</p>
+      </div>
+    </div>
+
+    <div class="auth-card">
+      <form id="register-form">
+        <label>Email <input type="email" name="email" required autofocus /></label>
+        <label>
+          Password
+          <input type="password" name="password" required minlength="8" />
+        </label>
+        <p class="hint">At least 8 characters.</p>
+        <button type="submit">Register</button>
+        <span id="register-status" class="status"></span>
+      </form>
+    </div>
+
+    <p class="auth-footer">Already have an account? <a href="/login">Log in</a></p>
+  </div>
+
+  <script>
+    const form = document.getElementById("register-form");
+    const status = document.getElementById("register-status");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      status.textContent = "Creating account…";
+      const data = Object.fromEntries(new FormData(form).entries());
+      try {
+        const res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `HTTP ${res.status}`);
+        }
+        window.location.href = "/careers";
+      } catch (err) {
+        status.textContent = err.message;
+      }
+    });
+  </script>
+</body>
+</html>
