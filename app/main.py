@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .db import init_db
-from .routers import imports, jobs, profile, resumes
+from .routers import imports, jobs, profile, resumes, stats
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -39,5 +39,6 @@ app.include_router(jobs.router)
 app.include_router(profile.router)
 app.include_router(imports.router)
 app.include_router(resumes.router)
+app.include_router(stats.router)
 
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

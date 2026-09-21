@@ -90,8 +90,27 @@
       </ul>
     </section>
 
+    <section id="stats-section">
+      <h2>Stats</h2>
+      <div id="stats-cards"></div>
+    </section>
+
     <section id="jobs-section">
       <h2>Jobs</h2>
+
+      <div class="inline-form">
+        <input type="search" id="jobs-search-input" placeholder="Search title or company…" />
+        <select id="jobs-stage-filter">
+          <option value="">All stages</option>
+          <option value="saved">saved</option>
+          <option value="applied">applied</option>
+          <option value="interview">interview</option>
+          <option value="offer">offer</option>
+          <option value="rejected">rejected</option>
+        </select>
+        <a id="export-csv-link" class="button-link" href="/api/jobs/export.csv" download>Export CSV</a>
+      </div>
+
       <table id="jobs-table">
         <thead>
           <tr>
@@ -102,10 +121,11 @@
             <th>Saved</th>
             <th>Link</th>
             <th>Fit</th>
+            <th>Notes</th>
           </tr>
         </thead>
         <tbody id="jobs-tbody">
-          <tr><td colspan="7" class="empty">No jobs saved yet. Use the extension to capture one.</td></tr>
+          <tr><td colspan="8" class="empty">No jobs saved yet. Use the extension to capture one.</td></tr>
         </tbody>
       </table>
 
@@ -116,6 +136,15 @@
           <button id="fit-analyze-btn" type="button">Analyze</button>
         </div>
         <div id="fit-results"></div>
+      </div>
+
+      <div id="notes-panel" class="hidden">
+        <h3>Notes: <span id="notes-panel-job-title"></span></h3>
+        <textarea id="notes-textarea" rows="4" placeholder="Interview prep, contact names, etc."></textarea>
+        <div>
+          <button id="notes-save-btn" type="button">Save notes</button>
+          <span id="notes-status" class="status"></span>
+        </div>
       </div>
     </section>
   </main>

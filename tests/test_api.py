@@ -25,12 +25,14 @@ def client(tmp_path, monkeypatch):
     import app.routers.jobs as jobs_module
     import app.routers.profile as profile_module
     import app.routers.resumes as resumes_module
+    import app.routers.stats as stats_module
 
     monkeypatch.setattr(jobs_module, "db", db_module.db)
     monkeypatch.setattr(profile_module, "db", db_module.db)
     monkeypatch.setattr(imports_module, "db", db_module.db)
     monkeypatch.setattr(resumes_module, "db", db_module.db)
     monkeypatch.setattr(resumes_module, "RESUMES_DIR", resumes_dir)
+    monkeypatch.setattr(stats_module, "db", db_module.db)
 
     import app.main as main_module
 
@@ -245,6 +247,76 @@ def test_fit_analysis_missing_description(client):
 
     res = client.get(f"/api/jobs/{job['id']}/fit", params={"resume_id": resume["id"]})
     assert res.status_code == 400
+
+
+def test_job_search_and_stage_filter(client):
+    client.post("/api/jobs", json={"url": "https://example.com/a", "title": "Backend Engineer", "company": "Acme"})
+    client.post("/api/jobs", json={"url": "https://example.com/b", "title": "Sales Rep", "company": "Widgets Inc"})
+    job_c = client.post(
+        "/api/jobs", json={"url": "https://example.com/c", "title": "Frontend Engineer", "company": "Acme"}
+    ).json()
+    client.patch(f"/api/jobs/{job_c['id']}/stage", json={"stage": "applied"})
+
+    res_q = client.get("/api/jobs", params={"q": "engineer"})
+    titles = {j["title"] for j in res_q.json()}
+    assert titles == {"Backend Engineer", "Frontend Engineer"}
+
+    res_company = client.get("/api/jobs", params={"q": "Acme"})
+    assert len(res_company.json()) == 2
+
+    res_stage = client.get("/api/jobs", params={"stage": "applied"})
+    assert [j["id"] for j in res_stage.json()] == [job_c["id"]]
+
+    res_combined = client.get("/api/jobs", params={"q": "engineer", "stage": "saved"})
+    assert [j["title"] for j in res_combined.json()] == ["Backend Engineer"]
+
+
+def test_job_notes_update(client):
+    job = client.post("/api/jobs", json={"url": "https://example.com/notes"}).json()
+    assert job["notes"] is None
+
+    res = client.patch(f"/api/jobs/{job['id']}/notes", json={"notes": "Talked to recruiter Jane."})
+    assert res.status_code == 200
+    assert res.json()["notes"] == "Talked to recruiter Jane."
+
+    res_missing = client.patch("/api/jobs/999/notes", json={"notes": "x"})
+    assert res_missing.status_code == 404
+
+
+def test_stats_counts_and_response_rate(client):
+    ids = []
+    for i in range(4):
+        job = client.post("/api/jobs", json={"url": f"https://example.com/stat/{i}"}).json()
+        ids.append(job["id"])
+
+    # 1 saved, 1 applied, 2 interview -> applied_or_beyond=3, reached_interview_or_beyond=2
+    client.patch(f"/api/jobs/{ids[1]}/stage", json={"stage": "applied"})
+    client.patch(f"/api/jobs/{ids[2]}/stage", json={"stage": "interview"})
+    client.patch(f"/api/jobs/{ids[3]}/stage", json={"stage": "interview"})
+
+    res = client.get("/api/stats")
+    assert res.status_code == 200
+    stats = res.json()
+
+    assert stats["total_jobs"] == 4
+    assert stats["counts_by_stage"]["saved"] == 1
+    assert stats["counts_by_stage"]["applied"] == 1
+    assert stats["counts_by_stage"]["interview"] == 2
+    assert stats["applied_or_beyond"] == 3
+    assert stats["response_rate"] == 67  # round(2/3 * 100)
+
+
+def test_jobs_csv_export(client):
+    client.post("/api/jobs", json={"url": "https://example.com/csv", "title": "CSV Role", "company": "Acme"})
+
+    res = client.get("/api/jobs/export.csv")
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/csv")
+    assert "attachment" in res.headers["content-disposition"]
+
+    body = res.text
+    assert "CSV Role" in body
+    assert body.startswith("id,url,title")
 
 
 def test_profile_roundtrip(client):

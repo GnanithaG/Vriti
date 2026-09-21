@@ -18,6 +18,10 @@ class JobStageUpdate(BaseModel):
     stage: str
 
 
+class JobNotesUpdate(BaseModel):
+    notes: str
+
+
 class JobOut(BaseModel):
     id: int
     url: str

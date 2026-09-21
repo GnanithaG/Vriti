@@ -34,7 +34,7 @@ function daysSince(dateStr) {
 function renderJobs(jobs) {
   if (jobs.length === 0) {
     jobsTbody.innerHTML =
-      '<tr><td colspan="7" class="empty">No jobs saved yet. Use the extension to capture one.</td></tr>';
+      '<tr><td colspan="8" class="empty">No jobs match.</td></tr>';
     return;
   }
 
@@ -56,6 +56,7 @@ function renderJobs(jobs) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stage: stageSelect.value }),
       });
+      loadStats();
     });
 
     const stageTd = document.createElement("td");
@@ -83,21 +84,44 @@ function renderJobs(jobs) {
     const fitTd = document.createElement("td");
     const fitBtn = document.createElement("button");
     fitBtn.type = "button";
-    fitBtn.className = "fit-btn";
+    fitBtn.className = "row-btn";
     fitBtn.textContent = "Fit";
     fitBtn.addEventListener("click", () => openFitPanel(job));
     fitTd.appendChild(fitBtn);
     tr.appendChild(fitTd);
 
+    const notesTd = document.createElement("td");
+    const notesBtn = document.createElement("button");
+    notesBtn.type = "button";
+    notesBtn.className = "row-btn";
+    notesBtn.textContent = job.notes ? "Notes ●" : "Notes";
+    notesBtn.addEventListener("click", () => openNotesPanel(job));
+    notesTd.appendChild(notesBtn);
+    tr.appendChild(notesTd);
+
     jobsTbody.appendChild(tr);
   }
 }
 
+const jobsSearchInput = document.getElementById("jobs-search-input");
+const jobsStageFilter = document.getElementById("jobs-stage-filter");
+
 async function loadJobs() {
-  const res = await fetch("/api/jobs");
+  const params = new URLSearchParams({
+    q: jobsSearchInput.value.trim(),
+    stage: jobsStageFilter.value,
+  });
+  const res = await fetch(`/api/jobs?${params}`);
   const jobs = await res.json();
   renderJobs(jobs);
 }
+
+let searchDebounceTimer;
+jobsSearchInput.addEventListener("input", () => {
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(loadJobs, 250);
+});
+jobsStageFilter.addEventListener("change", loadJobs);
 
 // --- Import: paste a URL ---------------------------------------------
 
@@ -122,6 +146,7 @@ urlImportForm.addEventListener("submit", async (event) => {
     urlImportStatus.textContent = `Added: ${job.title || job.url}`;
     urlImportInput.value = "";
     loadJobs();
+    loadStats();
   } catch (err) {
     urlImportStatus.textContent = `Failed: ${err.message}`;
   }
@@ -209,6 +234,7 @@ importSelectedBtn.addEventListener("click", async () => {
     boardSearchStatus.textContent = `Imported ${saved.length} job(s).`;
     boardResults.classList.add("hidden");
     loadJobs();
+    loadStats();
   } catch (err) {
     boardSearchStatus.textContent = `Failed: ${err.message}`;
   }
@@ -355,6 +381,72 @@ fitAnalyzeBtn.addEventListener("click", async () => {
   }
 });
 
+// --- Notes ---------------------------------------------------------------
+
+const notesPanel = document.getElementById("notes-panel");
+const notesPanelJobTitle = document.getElementById("notes-panel-job-title");
+const notesTextarea = document.getElementById("notes-textarea");
+const notesSaveBtn = document.getElementById("notes-save-btn");
+const notesStatus = document.getElementById("notes-status");
+
+let currentNotesJobId = null;
+
+function openNotesPanel(job) {
+  currentNotesJobId = job.id;
+  notesPanelJobTitle.textContent = job.title || job.url;
+  notesTextarea.value = job.notes || "";
+  notesStatus.textContent = "";
+  notesPanel.classList.remove("hidden");
+  notesPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+notesSaveBtn.addEventListener("click", async () => {
+  if (!currentNotesJobId) return;
+  notesStatus.textContent = "Saving…";
+  try {
+    const res = await fetch(`/api/jobs/${currentNotesJobId}/notes`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: notesTextarea.value }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    notesStatus.textContent = "Saved.";
+    loadJobs();
+  } catch (err) {
+    notesStatus.textContent = `Failed: ${err.message}`;
+  }
+});
+
+// --- Stats -----------------------------------------------------------------
+
+const statsCards = document.getElementById("stats-cards");
+
+async function loadStats() {
+  const res = await fetch("/api/stats");
+  const stats = await res.json();
+
+  statsCards.innerHTML = "";
+  const cards = [
+    ["Total jobs", stats.total_jobs],
+    ...STAGES.map((stage) => [stage, stats.counts_by_stage[stage] ?? 0]),
+    ["Response rate", `${stats.response_rate}%`],
+  ];
+  for (const [label, value] of cards) {
+    const card = document.createElement("div");
+    card.className = "stat-card";
+    const valueEl = document.createElement("div");
+    valueEl.className = "stat-value";
+    valueEl.textContent = value;
+    const labelEl = document.createElement("div");
+    labelEl.className = "stat-label";
+    labelEl.textContent = label;
+    card.appendChild(valueEl);
+    card.appendChild(labelEl);
+    statsCards.appendChild(card);
+  }
+}
+
 loadProfile();
 loadJobs();
 loadResumes();
+loadStats();
