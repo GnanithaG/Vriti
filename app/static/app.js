@@ -77,7 +77,10 @@ function renderJobs(jobs) {
     }
     tr.appendChild(stageTd);
     const savedTd = document.createElement("td");
-    savedTd.textContent = `${daysSince(job.created_at)}d ago`;
+    savedTd.textContent =
+      job.stage === "saved"
+        ? `Saved ${daysSince(job.created_at)}d ago`
+        : `${job.stage} ${daysSince(job.updated_at)}d ago`;
     tr.appendChild(savedTd);
     tr.appendChild(linkTd);
 
@@ -441,7 +444,7 @@ async function loadStats() {
 
   statsCards.innerHTML = "";
   const cards = [
-    ["Total jobs", stats.total_jobs],
+    ["Applications", stats.total_jobs],
     ...STAGES.map((stage) => [stage, stats.counts_by_stage[stage] ?? 0]),
     ["Response rate", `${stats.response_rate}%`],
   ];
