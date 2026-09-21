@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JobPilot</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header>
+    <h1>JobPilot</h1>
+    <p class="tagline">Your local job application copilot</p>
+  </header>
+
+  <main>
+    <section id="profile-section">
+      <h2>Profile</h2>
+      <p class="hint">Used to prefill safe, ordinary contact fields on job application forms.</p>
+      <form id="profile-form">
+        <div class="grid">
+          <label>Full name <input type="text" name="full_name" /></label>
+          <label>Email <input type="email" name="email" /></label>
+          <label>Phone <input type="text" name="phone" /></label>
+          <label>Location <input type="text" name="location" placeholder="City, State" /></label>
+          <label>LinkedIn URL <input type="url" name="linkedin_url" /></label>
+          <label>Website / portfolio URL <input type="url" name="website_url" /></label>
+          <label>Address <input type="text" name="address" /></label>
+          <label>City <input type="text" name="city" /></label>
+          <label>State <input type="text" name="state" /></label>
+          <label>Postal code <input type="text" name="postal_code" /></label>
+          <label>Country <input type="text" name="country" /></label>
+        </div>
+        <button type="submit">Save profile</button>
+        <span id="profile-status" class="status"></span>
+      </form>
+    </section>
+
+    <section id="jobs-section">
+      <h2>Jobs</h2>
+      <table id="jobs-table">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Company</th>
+            <th>Location</th>
+            <th>Stage</th>
+            <th>Saved</th>
+            <th>Link</th>
+          </tr>
+        </thead>
+        <tbody id="jobs-tbody">
+          <tr><td colspan="6" class="empty">No jobs saved yet. Use the extension to capture one.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
