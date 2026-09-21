@@ -26,6 +26,7 @@ def client(tmp_path, monkeypatch):
     import app.auth as auth_module
     import app.routers.applications as applications_module
     import app.routers.auth as auth_router_module
+    import app.routers.careers as careers_module
     import app.routers.imports as imports_module
     import app.routers.profile as profile_module
     import app.routers.resumes as resumes_module
@@ -35,6 +36,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(auth_module, "db", db_module.db)
     monkeypatch.setattr(auth_router_module, "db", db_module.db)
     monkeypatch.setattr(applications_module, "db", db_module.db)
+    monkeypatch.setattr(careers_module, "db", db_module.db)
     monkeypatch.setattr(profile_module, "db", db_module.db)
     monkeypatch.setattr(imports_module, "db", db_module.db)
     monkeypatch.setattr(resumes_module, "db", db_module.db)
@@ -490,6 +492,97 @@ def test_fit_analysis_missing_description(client):
 
     res = client.get(f"/api/applications/{application['id']}/fit", params={"resume_id": resume["id"]})
     assert res.status_code == 400
+
+
+# --- Careers (resume-driven job matching) -------------------------------
+
+
+def test_careers_matches_empty_catalog(client):
+    register(client)
+    content = make_docx_bytes(["Experienced Python engineer."])
+    resume = client.post(
+        "/api/resumes",
+        data={"label": "Resume"},
+        files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    ).json()
+
+    res = client.get("/api/careers/matches", params={"resume_id": resume["id"]})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["catalog_size"] == 0
+    assert body["matches"] == []
+
+
+def test_careers_matches_ranked_and_save_to_pipeline(client):
+    register(client)
+    content = make_docx_bytes(["Experienced Python engineer with a FastAPI background."])
+    resume = client.post(
+        "/api/resumes",
+        data={"label": "Resume"},
+        files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    ).json()
+
+    # Two catalog jobs, imported without ever being "saved" to this user's
+    # pipeline — importing already creates an application, so use a second
+    # account to populate the catalog without an application for user1.
+    client2 = TestClient(client.app)
+    register(client2, email="importer@example.com")
+    good_job = client2.post(
+        "/api/applications",
+        json={
+            "url": "https://example.com/job/good-match",
+            "title": "Backend Engineer",
+            "description": "Python and FastAPI experience required.",
+        },
+    ).json()
+    bad_job = client2.post(
+        "/api/applications",
+        json={
+            "url": "https://example.com/job/bad-match",
+            "title": "Marketing Manager",
+            "description": "Social media, branding, and content strategy experience.",
+        },
+    ).json()
+
+    res = client.get("/api/careers/matches", params={"resume_id": resume["id"]})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["catalog_size"] == 2
+    assert len(body["matches"]) == 2
+    # Ranked best-first.
+    assert body["matches"][0]["job_id"] == good_job["job_id"]
+    assert body["matches"][0]["score"] > body["matches"][1]["score"]
+    assert body["matches"][0]["saved"] is False
+
+    res_save = client.post(f"/api/careers/matches/{good_job['job_id']}/save")
+    assert res_save.status_code == 200
+    saved_application = res_save.json()
+    assert saved_application["job_id"] == good_job["job_id"]
+
+    res_again = client.get("/api/careers/matches", params={"resume_id": resume["id"]})
+    matches_by_job = {m["job_id"]: m for m in res_again.json()["matches"]}
+    assert matches_by_job[good_job["job_id"]]["saved"] is True
+    assert matches_by_job[good_job["job_id"]]["application_id"] == saved_application["id"]
+    assert matches_by_job[bad_job["job_id"]]["saved"] is False
+
+    # Saving is idempotent — matches whatever upsert_application already does.
+    res_save_again = client.post(f"/api/careers/matches/{good_job['job_id']}/save")
+    assert res_save_again.json()["id"] == saved_application["id"]
+
+    # Fresh account's catalog view is unaffected by user1's saves.
+    assert client.get("/api/applications").json()[0]["job_id"] == good_job["job_id"]
+
+
+def test_careers_matches_unknown_resume_404(client):
+    register(client)
+    res = client.get("/api/careers/matches", params={"resume_id": 999})
+    assert res.status_code == 404
+
+
+def test_careers_save_unknown_job_404(client):
+    register(client)
+    res = client.post("/api/careers/matches/999/save")
+    assert res.status_code == 404
 
 
 # --- AI-assisted resume tailoring --------------------------------------

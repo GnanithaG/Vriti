@@ -12,7 +12,7 @@ load_dotenv()  # local .env only — e.g. ANTHROPIC_API_KEY, SECRET_KEY
 
 from .auth import get_or_create_secret_key  # noqa: E402
 from .db import init_db  # noqa: E402
-from .routers import applications, auth, imports, profile, resumes, stats, tailoring  # noqa: E402
+from .routers import applications, auth, careers, imports, profile, resumes, stats, tailoring  # noqa: E402
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -56,8 +56,14 @@ def register_page():
     return FileResponse(STATIC_DIR / "register.html")
 
 
+@app.get("/careers")
+def careers_page():
+    return FileResponse(STATIC_DIR / "careers.html")
+
+
 app.include_router(auth.router)
 app.include_router(applications.router)
+app.include_router(careers.router)
 app.include_router(profile.router)
 app.include_router(imports.router)
 app.include_router(resumes.router)

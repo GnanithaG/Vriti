@@ -115,14 +115,16 @@ function renderJobs(jobs) {
 const jobsSearchInput = document.getElementById("jobs-search-input");
 const jobsStageFilter = document.getElementById("jobs-stage-filter");
 
+let currentJobs = [];
+
 async function loadJobs() {
   const params = new URLSearchParams({
     q: jobsSearchInput.value.trim(),
     stage: jobsStageFilter.value,
   });
   const res = await fetch(`/api/applications?${params}`);
-  const jobs = await res.json();
-  renderJobs(jobs);
+  currentJobs = await res.json();
+  renderJobs(currentJobs);
 }
 
 let searchDebounceTimer;
@@ -645,9 +647,16 @@ async function bootstrap() {
   userEmailEl.textContent = me.email;
 
   loadProfile();
-  loadJobs();
-  loadResumes();
   loadStats();
+  await Promise.all([loadJobs(), loadResumes()]);
+
+  const tailorApplicationId = new URLSearchParams(window.location.search).get("tailor");
+  if (tailorApplicationId) {
+    const application = currentJobs.find((j) => j.id === Number(tailorApplicationId));
+    if (application) {
+      openTailorPanel(application);
+    }
+  }
 }
 
 bootstrap();

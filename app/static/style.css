@@ -29,10 +29,19 @@ header h1 { margin-bottom: 0; }
 .account-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   font-size: 0.85em;
   color: var(--muted);
 }
+
+.top-nav { display: flex; gap: 12px; }
+.top-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 600;
+}
+.top-nav a.active { color: var(--accent); }
+.top-nav a:hover { color: var(--accent); }
 
 .secondary-btn {
   padding: 6px 12px;
@@ -253,3 +262,29 @@ a { color: var(--accent); }
 
 .suggestion-accept { display: flex; align-items: center; gap: 6px; font-size: 0.88em; }
 .suggestion-accept input { width: auto; }
+
+.match-card {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.match-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.match-title { font-weight: 600; }
+.match-meta { color: var(--muted); font-size: 0.88em; margin-top: 2px; }
+
+.match-score { font-size: 1.3em; font-weight: 600; white-space: nowrap; }
+.match-score.good { color: #1a8a3f; }
+.match-score.mid { color: #b3760f; }
+.match-score.low { color: #c0392b; }
+
+.match-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.match-actions button { width: auto; padding: 6px 14px; font-size: 0.88em; }

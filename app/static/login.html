@@ -42,7 +42,7 @@
           const err = await res.json().catch(() => ({}));
           throw new Error(err.detail || `HTTP ${res.status}`);
         }
-        window.location.href = "/";
+        window.location.href = "/careers";
       } catch (err) {
         status.textContent = err.message;
       }
