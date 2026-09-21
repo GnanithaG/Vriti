@@ -31,10 +31,29 @@ function daysSince(dateStr) {
   return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
 }
 
+const EMPLOYMENT_LABELS = {
+  full_time: "Full-time",
+  part_time: "Part-time",
+  contract: "Contract",
+  internship: "Internship",
+  other: "Other",
+};
+const CONTRACT_LABELS = { w2: "W2", c2c: "C2C", c2h: "C2H" };
+
+function employmentBadge(job) {
+  if (!job.employment_type) return null;
+  const badge = document.createElement("span");
+  badge.className = `badge badge-${job.employment_type}`;
+  let text = EMPLOYMENT_LABELS[job.employment_type] || job.employment_type;
+  if (job.contract_type) text += ` · ${CONTRACT_LABELS[job.contract_type] || job.contract_type}`;
+  badge.textContent = text;
+  return badge;
+}
+
 function renderJobs(jobs) {
   if (jobs.length === 0) {
     jobsTbody.innerHTML =
-      '<tr><td colspan="9" class="empty">No jobs match.</td></tr>';
+      '<tr><td colspan="10" class="empty">No jobs match.</td></tr>';
     return;
   }
 
@@ -75,6 +94,12 @@ function renderJobs(jobs) {
       td.textContent = value ?? "";
       tr.appendChild(td);
     }
+
+    const typeTd = document.createElement("td");
+    const badge = employmentBadge(job);
+    if (badge) typeTd.appendChild(badge);
+    tr.appendChild(typeTd);
+
     tr.appendChild(stageTd);
     const savedTd = document.createElement("td");
     savedTd.textContent =
@@ -117,6 +142,8 @@ function renderJobs(jobs) {
 
 const jobsSearchInput = document.getElementById("jobs-search-input");
 const jobsStageFilter = document.getElementById("jobs-stage-filter");
+const jobsEmploymentFilter = document.getElementById("jobs-employment-filter");
+const jobsContractFilter = document.getElementById("jobs-contract-filter");
 
 let currentJobs = [];
 
@@ -124,6 +151,8 @@ async function loadJobs() {
   const params = new URLSearchParams({
     q: jobsSearchInput.value.trim(),
     stage: jobsStageFilter.value,
+    employment_type: jobsEmploymentFilter.value,
+    contract_type: jobsContractFilter.value,
   });
   const res = await fetch(`/api/applications?${params}`);
   currentJobs = await res.json();
@@ -136,6 +165,8 @@ jobsSearchInput.addEventListener("input", () => {
   searchDebounceTimer = setTimeout(loadJobs, 250);
 });
 jobsStageFilter.addEventListener("change", loadJobs);
+jobsEmploymentFilter.addEventListener("change", loadJobs);
+jobsContractFilter.addEventListener("change", loadJobs);
 
 // --- Import: paste a URL ---------------------------------------------
 

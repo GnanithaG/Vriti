@@ -17,6 +17,8 @@ const anotherFileInput = document.getElementById("another-file-input");
 const matchesStatus = document.getElementById("matches-status");
 const thinCatalogHint = document.getElementById("thin-catalog-hint");
 const matchesList = document.getElementById("matches-list");
+const careersEmploymentFilter = document.getElementById("careers-employment-filter");
+const careersContractFilter = document.getElementById("careers-contract-filter");
 
 logoutBtn.addEventListener("click", async () => {
   await fetch("/api/auth/logout", { method: "POST" });
@@ -65,9 +67,30 @@ anotherUploadForm.addEventListener("submit", async (event) => {
 });
 
 resumeSelect.addEventListener("change", () => loadMatches(Number(resumeSelect.value)));
+careersEmploymentFilter.addEventListener("change", () => loadMatches(Number(resumeSelect.value)));
+careersContractFilter.addEventListener("change", () => loadMatches(Number(resumeSelect.value)));
 
 function scoreClass(score) {
   return score >= 70 ? "good" : score >= 40 ? "mid" : "low";
+}
+
+const EMPLOYMENT_LABELS = {
+  full_time: "Full-time",
+  part_time: "Part-time",
+  contract: "Contract",
+  internship: "Internship",
+  other: "Other",
+};
+const CONTRACT_LABELS = { w2: "W2", c2c: "C2C", c2h: "C2H" };
+
+function employmentBadge(match) {
+  if (!match.employment_type) return null;
+  const badge = document.createElement("span");
+  badge.className = `badge badge-${match.employment_type}`;
+  let text = EMPLOYMENT_LABELS[match.employment_type] || match.employment_type;
+  if (match.contract_type) text += ` · ${CONTRACT_LABELS[match.contract_type] || match.contract_type}`;
+  badge.textContent = text;
+  return badge;
 }
 
 function renderChips(terms, kind) {
@@ -98,6 +121,8 @@ function renderMatchCard(match) {
   meta.textContent = [match.company, match.location].filter(Boolean).join(" · ");
   titleBlock.appendChild(title);
   titleBlock.appendChild(meta);
+  const badge = employmentBadge(match);
+  if (badge) titleBlock.appendChild(badge);
   header.appendChild(titleBlock);
 
   const score = document.createElement("div");
@@ -172,7 +197,12 @@ async function loadMatches(resumeId) {
   thinCatalogHint.classList.add("hidden");
 
   try {
-    const res = await fetch(`/api/careers/matches?resume_id=${resumeId}`);
+    const params = new URLSearchParams({
+      resume_id: resumeId,
+      employment_type: careersEmploymentFilter.value,
+      contract_type: careersContractFilter.value,
+    });
+    const res = await fetch(`/api/careers/matches?${params}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const result = await res.json();
 

@@ -256,6 +256,68 @@ def test_application_notes_update(client):
     assert res_missing.status_code == 404
 
 
+def test_application_employment_and_contract_type_classified_on_create(client):
+    register(client)
+    full_time = client.post(
+        "/api/applications",
+        json={
+            "url": "https://example.com/ft",
+            "title": "Backend Engineer",
+            "description": "This is a full-time role on our platform team.",
+        },
+    ).json()
+    assert full_time["employment_type"] == "full_time"
+    assert full_time["contract_type"] is None
+
+    c2c = client.post(
+        "/api/applications",
+        json={
+            "url": "https://example.com/c2c",
+            "title": "Java Developer",
+            "description": "6 month contract, C2C only.",
+        },
+    ).json()
+    assert c2c["employment_type"] == "contract"
+    assert c2c["contract_type"] == "c2c"
+
+    from_schema_org = client.post(
+        "/api/applications",
+        json={
+            "url": "https://example.com/schema-org",
+            "title": "Data Analyst",
+            "description": "No type hints in the text itself.",
+            "employment_type_raw": "CONTRACTOR",
+        },
+    ).json()
+    assert from_schema_org["employment_type"] == "contract"
+    assert from_schema_org["contract_type"] is None
+
+
+def test_application_filter_by_employment_and_contract_type(client):
+    register(client)
+    client.post(
+        "/api/applications",
+        json={"url": "https://example.com/w2", "title": "QA", "description": "W2 contract only."},
+    )
+    client.post(
+        "/api/applications",
+        json={"url": "https://example.com/c2h", "title": "DevOps", "description": "Contract-to-hire role."},
+    )
+    client.post(
+        "/api/applications",
+        json={"url": "https://example.com/perm", "title": "Manager", "description": "Full-time position."},
+    )
+
+    contracts = client.get("/api/applications", params={"employment_type": "contract"}).json()
+    assert {a["title"] for a in contracts} == {"QA", "DevOps"}
+
+    c2h_only = client.get("/api/applications", params={"contract_type": "c2h"}).json()
+    assert [a["title"] for a in c2h_only] == ["DevOps"]
+
+    full_time_only = client.get("/api/applications", params={"employment_type": "full_time"}).json()
+    assert [a["title"] for a in full_time_only] == ["Manager"]
+
+
 def test_stats_counts_and_response_rate(client):
     register(client)
     ids = []
@@ -577,6 +639,46 @@ def test_careers_matches_unknown_resume_404(client):
     register(client)
     res = client.get("/api/careers/matches", params={"resume_id": 999})
     assert res.status_code == 404
+
+
+def test_careers_matches_filter_by_employment_and_contract_type(client):
+    register(client)
+    content = make_docx_bytes(["Experienced Python engineer with a FastAPI background."])
+    resume = client.post(
+        "/api/resumes",
+        data={"label": "Resume"},
+        files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    ).json()
+
+    client2 = TestClient(client.app)
+    register(client2, email="importer2@example.com")
+    client2.post(
+        "/api/applications",
+        json={
+            "url": "https://example.com/job/ft",
+            "title": "Backend Engineer",
+            "description": "Python and FastAPI, full-time role.",
+        },
+    )
+    client2.post(
+        "/api/applications",
+        json={
+            "url": "https://example.com/job/c2c",
+            "title": "Backend Contractor",
+            "description": "Python and FastAPI, 12 month contract, C2C only.",
+        },
+    )
+
+    res = client.get(
+        "/api/careers/matches",
+        params={"resume_id": resume["id"], "employment_type": "contract", "contract_type": "c2c"},
+    )
+    assert res.status_code == 200
+    matches = res.json()["matches"]
+    assert len(matches) == 1
+    assert matches[0]["title"] == "Backend Contractor"
+    assert matches[0]["employment_type"] == "contract"
+    assert matches[0]["contract_type"] == "c2c"
 
 
 def test_careers_save_unknown_job_404(client):

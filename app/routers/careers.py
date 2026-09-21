@@ -11,7 +11,12 @@ MAX_MATCHES = 50
 
 
 @router.get("/matches")
-def get_matches(resume_id: int, user: dict = Depends(get_current_user)):
+def get_matches(
+    resume_id: int,
+    employment_type: str = "",
+    contract_type: str = "",
+    user: dict = Depends(get_current_user),
+):
     with db() as conn:
         resume = conn.execute(
             "SELECT * FROM resumes WHERE id = ? AND user_id = ?", (resume_id, user["id"])
@@ -19,9 +24,16 @@ def get_matches(resume_id: int, user: dict = Depends(get_current_user)):
         if not resume:
             raise HTTPException(status_code=404, detail="resume not found")
 
-        catalog_jobs = conn.execute(
-            "SELECT * FROM jobs WHERE description IS NOT NULL AND description != ''"
-        ).fetchall()
+        query = "SELECT * FROM jobs WHERE description IS NOT NULL AND description != ''"
+        params: list = []
+        if employment_type:
+            query += " AND employment_type = ?"
+            params.append(employment_type)
+        if contract_type:
+            query += " AND contract_type = ?"
+            params.append(contract_type)
+
+        catalog_jobs = conn.execute(query, params).fetchall()
 
         saved_job_ids = {
             row["job_id"]: row["id"]
@@ -41,6 +53,8 @@ def get_matches(resume_id: int, user: dict = Depends(get_current_user)):
                 "title": job["title"],
                 "company": job["company"],
                 "location": job["location"],
+                "employment_type": job["employment_type"],
+                "contract_type": job["contract_type"],
                 "score": fit["score"],
                 "matched_terms": fit["matched_terms"],
                 "missing_terms": fit["missing_terms"],

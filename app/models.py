@@ -22,6 +22,10 @@ class JobCreate(BaseModel):
     company: Optional[str] = None
     location: Optional[str] = None
     description: Optional[str] = None
+    # Raw schema.org JobPosting `employmentType` value, when the source page
+    # had JSON-LD (e.g. extension capture). classify_employment() maps it;
+    # untrusted free text either way, never persisted verbatim.
+    employment_type_raw: Optional[str] = None
 
 
 class ApplicationStageUpdate(BaseModel):

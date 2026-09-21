@@ -19,6 +19,8 @@ APPLICATION_COLUMNS = (
     "company",
     "location",
     "description",
+    "employment_type",
+    "contract_type",
     "stage",
     "notes",
     "created_at",
@@ -34,6 +36,8 @@ _JOINED_SELECT = """
         jobs.company AS company,
         jobs.location AS location,
         jobs.description AS description,
+        jobs.employment_type AS employment_type,
+        jobs.contract_type AS contract_type,
         applications.stage AS stage,
         applications.notes AS notes,
         applications.created_at AS created_at,
@@ -64,13 +68,20 @@ def create_application(job: JobCreate, user: dict = Depends(get_current_user)):
             location=job.location,
             description=job.description,
             source="manual",
+            raw_employment_type=job.employment_type_raw,
         )
         application = upsert_application(conn, user["id"], catalog_job["id"])
         return get_application_row(conn, application["id"], user["id"])
 
 
 @router.get("")
-def list_applications(q: str = "", stage: str = "", user: dict = Depends(get_current_user)):
+def list_applications(
+    q: str = "",
+    stage: str = "",
+    employment_type: str = "",
+    contract_type: str = "",
+    user: dict = Depends(get_current_user),
+):
     query = f"{_JOINED_SELECT} WHERE applications.user_id = ?"
     params: list = [user["id"]]
 
@@ -82,6 +93,14 @@ def list_applications(q: str = "", stage: str = "", user: dict = Depends(get_cur
     if stage:
         query += " AND applications.stage = ?"
         params.append(stage)
+
+    if employment_type:
+        query += " AND jobs.employment_type = ?"
+        params.append(employment_type)
+
+    if contract_type:
+        query += " AND jobs.contract_type = ?"
+        params.append(contract_type)
 
     query += " ORDER BY applications.created_at DESC"
 

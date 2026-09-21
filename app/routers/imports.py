@@ -38,6 +38,7 @@ def import_from_url(payload: UrlImportIn, user: dict = Depends(get_current_user)
             location=job.get("location"),
             description=job.get("description"),
             source="url",
+            raw_employment_type=job.get("employment_type_raw"),
         )
         application = upsert_application(conn, user["id"], catalog_job["id"])
         return get_application_row(conn, application["id"], user["id"])

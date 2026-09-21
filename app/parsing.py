@@ -51,12 +51,16 @@ def _extract_json_ld(soup: BeautifulSoup) -> Optional[dict]:
             graph = candidate.get("@graph", [candidate])
             for node in graph:
                 if isinstance(node, dict) and node.get("@type") == "JobPosting":
+                    raw_type = node.get("employmentType")
+                    if isinstance(raw_type, list):
+                        raw_type = " ".join(str(t) for t in raw_type)
                     return {
                         "title": node.get("title") or None,
                         "company": (node.get("hiringOrganization") or {}).get("name")
                         or None,
                         "location": _extract_location(node.get("jobLocation")),
                         "description": _strip_html(node.get("description")),
+                        "employment_type_raw": raw_type or None,
                     }
     return None
 
@@ -68,7 +72,13 @@ def _extract_fallback(soup: BeautifulSoup) -> dict:
         title = soup.title.get_text(strip=True)
 
     description = soup.get_text(" ", strip=True)[:MAX_DESCRIPTION_CHARS] or None
-    return {"title": title, "company": None, "location": None, "description": description}
+    return {
+        "title": title,
+        "company": None,
+        "location": None,
+        "description": description,
+        "employment_type_raw": None,
+    }
 
 
 def parse_job_posting_html(html: str) -> dict:

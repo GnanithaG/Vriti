@@ -124,6 +124,19 @@
           <option value="offer">offer</option>
           <option value="rejected">rejected</option>
         </select>
+        <select id="jobs-employment-filter">
+          <option value="">All types</option>
+          <option value="full_time">Full-time</option>
+          <option value="contract">Contract</option>
+          <option value="part_time">Part-time</option>
+          <option value="internship">Internship</option>
+        </select>
+        <select id="jobs-contract-filter">
+          <option value="">Any contract type</option>
+          <option value="w2">W2</option>
+          <option value="c2c">C2C</option>
+          <option value="c2h">C2H</option>
+        </select>
         <a id="export-csv-link" class="button-link" href="/api/applications/export.csv" download>Export CSV</a>
       </div>
 
@@ -133,6 +146,7 @@
             <th>Title</th>
             <th>Company</th>
             <th>Location</th>
+            <th>Type</th>
             <th>Stage</th>
             <th>Status</th>
             <th>Link</th>
@@ -142,7 +156,7 @@
           </tr>
         </thead>
         <tbody id="jobs-tbody">
-          <tr><td colspan="9" class="empty">No jobs saved yet. Use the extension to capture one.</td></tr>
+          <tr><td colspan="10" class="empty">No jobs saved yet. Use the extension to capture one.</td></tr>
         </tbody>
       </table>
 

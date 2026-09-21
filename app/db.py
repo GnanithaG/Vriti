@@ -4,6 +4,8 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
+from .classify import classify_employment
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
 DB_PATH = DATA_DIR / "jobpilot.db"
@@ -49,6 +51,10 @@ CREATE TABLE IF NOT EXISTS jobs (
     company TEXT,
     location TEXT,
     description TEXT,
+    -- 'full_time' | 'part_time' | 'contract' | 'internship' | 'other' | NULL
+    employment_type TEXT,
+    -- only set when employment_type = 'contract': 'w2' | 'c2c' | 'c2h' | NULL
+    contract_type TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -113,28 +119,48 @@ def _quarantine_pre_auth_db():
     DB_PATH.rename(backup_path)
 
 
+def _ensure_job_columns(conn):
+    """Adds columns introduced after a database's first creation. SQLite's
+    CREATE TABLE IF NOT EXISTS won't retrofit new columns onto an existing
+    table, so new columns need an explicit, idempotent ALTER here."""
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+    if "employment_type" not in existing:
+        conn.execute("ALTER TABLE jobs ADD COLUMN employment_type TEXT")
+    if "contract_type" not in existing:
+        conn.execute("ALTER TABLE jobs ADD COLUMN contract_type TEXT")
+
+
 def init_db():
     RESUMES_DIR.mkdir(exist_ok=True)
     _quarantine_pre_auth_db()
     with db() as conn:
         conn.executescript(SCHEMA)
+        _ensure_job_columns(conn)
 
 
 def upsert_job(
     conn, url, title=None, company=None, location=None, description=None,
-    source=None, source_id=None,
+    source=None, source_id=None, raw_employment_type=None,
 ):
     """Insert a catalog job, or return the existing row if `url` is already saved."""
     existing = conn.execute("SELECT * FROM jobs WHERE url = ?", (url,)).fetchone()
     if existing:
         return dict(existing)
 
+    employment_type, contract_type = classify_employment(title, description, raw_employment_type)
+
     cur = conn.execute(
         """
-        INSERT INTO jobs (url, title, company, location, description, source, source_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO jobs (
+            url, title, company, location, description, source, source_id,
+            employment_type, contract_type
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (url, title, company, location, description, source, source_id),
+        (
+            url, title, company, location, description, source, source_id,
+            employment_type, contract_type,
+        ),
     )
     row = conn.execute("SELECT * FROM jobs WHERE id = ?", (cur.lastrowid,)).fetchone()
     return dict(row)

@@ -52,6 +52,9 @@ function extractJobPostingJsonLd() {
       const graph = candidate["@graph"] ? candidate["@graph"] : [candidate];
       for (const node of graph) {
         if (node && node["@type"] === "JobPosting") {
+          const rawType = Array.isArray(node.employmentType)
+            ? node.employmentType.join(" ")
+            : node.employmentType;
           return {
             title: node.title || null,
             company:
@@ -59,6 +62,7 @@ function extractJobPostingJsonLd() {
               null,
             location: extractLocation(node.jobLocation),
             description: stripHtml(node.description) || null,
+            employment_type_raw: rawType || null,
           };
         }
       }
@@ -93,7 +97,7 @@ function extractFallback() {
     document.title ||
     null;
   const description = document.body.innerText.slice(0, 5000);
-  return { title, company: null, location: null, description };
+  return { title, company: null, location: null, description, employment_type_raw: null };
 }
 
 function extractJobPosting() {
