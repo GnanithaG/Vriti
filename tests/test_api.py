@@ -1,5 +1,7 @@
 import importlib
+import io
 
+import docx
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -12,17 +14,23 @@ def client(tmp_path, monkeypatch):
     import app.db as db_module
 
     importlib.reload(db_module)
+    resumes_dir = tmp_path / "data" / "resumes"
     monkeypatch.setattr(db_module, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(db_module, "DB_PATH", tmp_path / "data" / "jobpilot.db")
+    monkeypatch.setattr(db_module, "RESUMES_DIR", resumes_dir)
     db_module.DATA_DIR.mkdir(exist_ok=True)
+    resumes_dir.mkdir(exist_ok=True)
 
     import app.routers.imports as imports_module
     import app.routers.jobs as jobs_module
     import app.routers.profile as profile_module
+    import app.routers.resumes as resumes_module
 
     monkeypatch.setattr(jobs_module, "db", db_module.db)
     monkeypatch.setattr(profile_module, "db", db_module.db)
     monkeypatch.setattr(imports_module, "db", db_module.db)
+    monkeypatch.setattr(resumes_module, "db", db_module.db)
+    monkeypatch.setattr(resumes_module, "RESUMES_DIR", resumes_dir)
 
     import app.main as main_module
 
@@ -159,6 +167,84 @@ def test_import_lever_and_bulk_import(client, monkeypatch):
     res_bulk2 = client.post("/api/imports/bulk", json={"jobs": candidates})
     assert res_bulk2.json()[0]["id"] == saved[0]["id"]
     assert len(client.get("/api/jobs").json()) == 1
+
+
+def make_docx_bytes(paragraphs):
+    document = docx.Document()
+    for text in paragraphs:
+        document.add_paragraph(text)
+    buffer = io.BytesIO()
+    document.save(buffer)
+    return buffer.getvalue()
+
+
+def test_resume_upload_extracts_text(client):
+    content = make_docx_bytes(
+        ["Ada Lovelace", "Experienced Python engineer with FastAPI background."]
+    )
+    res = client.post(
+        "/api/resumes",
+        data={"label": "Main resume"},
+        files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    )
+    assert res.status_code == 200
+    resume = res.json()
+    assert resume["label"] == "Main resume"
+    assert "Python" in resume["extracted_text"]
+
+    res_list = client.get("/api/resumes")
+    assert len(res_list.json()) == 1
+
+
+def test_resume_upload_rejects_unsupported_extension(client):
+    res = client.post(
+        "/api/resumes",
+        data={"label": "Notes"},
+        files={"file": ("notes.txt", b"plain text", "text/plain")},
+    )
+    assert res.status_code == 400
+
+
+def test_fit_analysis(client):
+    job = client.post(
+        "/api/jobs",
+        json={
+            "url": "https://example.com/job/fit",
+            "description": (
+                "We need a Python developer with FastAPI and SQLite experience. "
+                "Docker and AWS are a plus."
+            ),
+        },
+    ).json()
+
+    content = make_docx_bytes(["Experienced Python engineer with a FastAPI background."])
+    resume = client.post(
+        "/api/resumes",
+        data={"label": "Main resume"},
+        files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    ).json()
+
+    res = client.get(f"/api/jobs/{job['id']}/fit", params={"resume_id": resume["id"]})
+    assert res.status_code == 200
+    result = res.json()
+
+    assert "Python" in result["matched_terms"]
+    assert "FastAPI" in result["matched_terms"]
+    assert "Docker" in result["missing_terms"]
+    assert 0 < result["score"] < 100
+
+
+def test_fit_analysis_missing_description(client):
+    job = client.post("/api/jobs", json={"url": "https://example.com/job/nodesc"}).json()
+    content = make_docx_bytes(["Some resume text"])
+    resume = client.post(
+        "/api/resumes",
+        data={"label": "Resume"},
+        files={"file": ("resume.docx", content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    ).json()
+
+    res = client.get(f"/api/jobs/{job['id']}/fit", params={"resume_id": resume["id"]})
+    assert res.status_code == 400
 
 
 def test_profile_roundtrip(client):

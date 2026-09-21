@@ -6,6 +6,7 @@ from pathlib import Path
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
 DB_PATH = DATA_DIR / "jobpilot.db"
+RESUMES_DIR = DATA_DIR / "resumes"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -19,6 +20,15 @@ CREATE TABLE IF NOT EXISTS jobs (
     notes TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS resumes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    label TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    extracted_text TEXT,
+    base_resume_id INTEGER REFERENCES resumes(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS profile (
@@ -52,6 +62,7 @@ def db():
 
 
 def init_db():
+    RESUMES_DIR.mkdir(exist_ok=True)
     with db() as conn:
         conn.executescript(SCHEMA)
         conn.execute(

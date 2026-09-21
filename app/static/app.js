@@ -34,7 +34,7 @@ function daysSince(dateStr) {
 function renderJobs(jobs) {
   if (jobs.length === 0) {
     jobsTbody.innerHTML =
-      '<tr><td colspan="6" class="empty">No jobs saved yet. Use the extension to capture one.</td></tr>';
+      '<tr><td colspan="7" class="empty">No jobs saved yet. Use the extension to capture one.</td></tr>';
     return;
   }
 
@@ -79,6 +79,15 @@ function renderJobs(jobs) {
     savedTd.textContent = `${daysSince(job.created_at)}d ago`;
     tr.appendChild(savedTd);
     tr.appendChild(linkTd);
+
+    const fitTd = document.createElement("td");
+    const fitBtn = document.createElement("button");
+    fitBtn.type = "button";
+    fitBtn.className = "fit-btn";
+    fitBtn.textContent = "Fit";
+    fitBtn.addEventListener("click", () => openFitPanel(job));
+    fitTd.appendChild(fitBtn);
+    tr.appendChild(fitTd);
 
     jobsTbody.appendChild(tr);
   }
@@ -205,5 +214,147 @@ importSelectedBtn.addEventListener("click", async () => {
   }
 });
 
+// --- Resumes -----------------------------------------------------------
+
+const resumeUploadForm = document.getElementById("resume-upload-form");
+const resumeLabelInput = document.getElementById("resume-label-input");
+const resumeFileInput = document.getElementById("resume-file-input");
+const resumeUploadStatus = document.getElementById("resume-upload-status");
+const resumesList = document.getElementById("resumes-list");
+const fitResumeSelect = document.getElementById("fit-resume-select");
+
+let resumes = [];
+
+function renderResumes() {
+  if (resumes.length === 0) {
+    resumesList.innerHTML = '<li class="empty">No resumes uploaded yet.</li>';
+  } else {
+    resumesList.innerHTML = "";
+    for (const resume of resumes) {
+      const li = document.createElement("li");
+      const label = document.createElement("span");
+      label.textContent = resume.label;
+      const date = document.createElement("span");
+      date.className = "resume-date";
+      date.textContent = resume.created_at;
+      li.appendChild(label);
+      li.appendChild(date);
+      resumesList.appendChild(li);
+    }
+  }
+
+  fitResumeSelect.innerHTML = "";
+  for (const resume of resumes) {
+    const opt = document.createElement("option");
+    opt.value = String(resume.id);
+    opt.textContent = resume.label;
+    fitResumeSelect.appendChild(opt);
+  }
+}
+
+async function loadResumes() {
+  const res = await fetch("/api/resumes");
+  resumes = await res.json();
+  renderResumes();
+}
+
+resumeUploadForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const file = resumeFileInput.files[0];
+  if (!file) return;
+
+  resumeUploadStatus.textContent = "Uploading…";
+  const formData = new FormData();
+  formData.append("label", resumeLabelInput.value);
+  formData.append("file", file);
+
+  try {
+    const res = await fetch("/api/resumes", { method: "POST", body: formData });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    resumeUploadStatus.textContent = "Uploaded.";
+    resumeUploadForm.reset();
+    loadResumes();
+  } catch (err) {
+    resumeUploadStatus.textContent = `Failed: ${err.message}`;
+  }
+});
+
+// --- Fit analysis --------------------------------------------------------
+
+const fitPanel = document.getElementById("fit-panel");
+const fitPanelJobTitle = document.getElementById("fit-panel-job-title");
+const fitAnalyzeBtn = document.getElementById("fit-analyze-btn");
+const fitResults = document.getElementById("fit-results");
+
+let currentFitJobId = null;
+
+function openFitPanel(job) {
+  currentFitJobId = job.id;
+  fitPanelJobTitle.textContent = job.title || job.url;
+  fitResults.innerHTML = "";
+  fitPanel.classList.remove("hidden");
+  fitPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function renderTermChips(container, heading, terms, kind) {
+  const group = document.createElement("div");
+  group.className = "term-group";
+  const h4 = document.createElement("h4");
+  h4.textContent = `${heading} (${terms.length})`;
+  group.appendChild(h4);
+
+  if (terms.length === 0) {
+    const none = document.createElement("span");
+    none.className = "hint";
+    none.textContent = "None.";
+    group.appendChild(none);
+  } else {
+    for (const term of terms) {
+      const chip = document.createElement("span");
+      chip.className = `term-chip ${kind}`;
+      chip.textContent = term;
+      group.appendChild(chip);
+    }
+  }
+  container.appendChild(group);
+}
+
+fitAnalyzeBtn.addEventListener("click", async () => {
+  if (!currentFitJobId) return;
+  const resumeId = fitResumeSelect.value;
+  if (!resumeId) {
+    fitResults.innerHTML = '<p class="hint">Upload a resume first.</p>';
+    return;
+  }
+
+  fitResults.innerHTML = '<p class="hint">Analyzing…</p>';
+  try {
+    const res = await fetch(
+      `/api/jobs/${currentFitJobId}/fit?resume_id=${resumeId}`
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const result = await res.json();
+
+    fitResults.innerHTML = "";
+    const scoreEl = document.createElement("div");
+    const scoreClass = result.score >= 70 ? "good" : result.score >= 40 ? "mid" : "low";
+    scoreEl.className = `fit-score ${scoreClass}`;
+    scoreEl.textContent = `${result.score}% match`;
+    fitResults.appendChild(scoreEl);
+
+    renderTermChips(fitResults, "Matched terms", result.matched_terms, "matched");
+    renderTermChips(fitResults, "Missing from resume", result.missing_terms, "missing");
+  } catch (err) {
+    fitResults.innerHTML = `<p class="hint">Failed: ${err.message}</p>`;
+  }
+});
+
 loadProfile();
 loadJobs();
+loadResumes();
