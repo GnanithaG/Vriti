@@ -57,3 +57,20 @@ def init_db():
         conn.execute(
             "INSERT OR IGNORE INTO profile (id) VALUES (1)"
         )
+
+
+def upsert_job(conn, url, title=None, company=None, location=None, description=None):
+    """Insert a job, or return the existing row if `url` is already saved."""
+    existing = conn.execute("SELECT * FROM jobs WHERE url = ?", (url,)).fetchone()
+    if existing:
+        return dict(existing)
+
+    cur = conn.execute(
+        """
+        INSERT INTO jobs (url, title, company, location, description)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (url, title, company, location, description),
+    )
+    row = conn.execute("SELECT * FROM jobs WHERE id = ?", (cur.lastrowid,)).fetchone()
+    return dict(row)

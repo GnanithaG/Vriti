@@ -47,3 +47,18 @@ class ProfileIn(BaseModel):
 
 class ProfileOut(ProfileIn):
     updated_at: str
+
+
+class UrlImportIn(BaseModel):
+    url: str
+
+
+class BoardCandidate(BaseModel):
+    url: str
+    title: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+
+
+class BulkImportIn(BaseModel):
+    jobs: list[BoardCandidate]

@@ -68,3 +68,23 @@ td.empty { color: var(--muted); text-align: center; padding: 24px; }
 select { padding: 4px 6px; border-radius: 4px; border: 1px solid var(--border); }
 
 a { color: var(--accent); }
+
+.import-block { margin-bottom: 20px; }
+.import-block h3 { font-size: 0.95em; margin-bottom: 8px; }
+
+.inline-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.inline-form input {
+  flex: 1 1 200px;
+}
+
+.hidden { display: none; }
+
+#board-results { margin-top: 12px; }
+#board-results-table td, #board-results-table th { padding: 6px 8px; }
+#import-selected-btn { margin-top: 8px; }

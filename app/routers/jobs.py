@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from ..db import db
+from ..db import db, upsert_job
 from ..models import VALID_STAGES, JobCreate, JobStageUpdate
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
@@ -9,23 +9,14 @@ router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 @router.post("")
 def create_job(job: JobCreate):
     with db() as conn:
-        existing = conn.execute(
-            "SELECT * FROM jobs WHERE url = ?", (job.url,)
-        ).fetchone()
-        if existing:
-            return dict(existing)
-
-        cur = conn.execute(
-            """
-            INSERT INTO jobs (url, title, company, location, description)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (job.url, job.title, job.company, job.location, job.description),
+        return upsert_job(
+            conn,
+            job.url,
+            title=job.title,
+            company=job.company,
+            location=job.location,
+            description=job.description,
         )
-        row = conn.execute(
-            "SELECT * FROM jobs WHERE id = ?", (cur.lastrowid,)
-        ).fetchone()
-        return dict(row)
 
 
 @router.get("")

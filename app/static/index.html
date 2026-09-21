@@ -35,6 +35,47 @@
       </form>
     </section>
 
+    <section id="import-section">
+      <h2>Import jobs</h2>
+
+      <div class="import-block">
+        <h3>Paste a job URL</h3>
+        <form id="url-import-form" class="inline-form">
+          <input type="url" id="url-import-input" placeholder="https://company.com/careers/role" required />
+          <button type="submit">Import</button>
+        </form>
+        <span id="url-import-status" class="status"></span>
+      </div>
+
+      <div class="import-block">
+        <h3>Import from a Greenhouse or Lever board</h3>
+        <form id="board-search-form" class="inline-form">
+          <select id="board-type">
+            <option value="greenhouse">Greenhouse</option>
+            <option value="lever">Lever</option>
+          </select>
+          <input type="text" id="board-company" placeholder="company slug (e.g. stripe)" required />
+          <input type="text" id="board-keyword" placeholder="keyword filter (optional)" />
+          <button type="submit">Search</button>
+        </form>
+        <span id="board-search-status" class="status"></span>
+
+        <div id="board-results" class="hidden">
+          <table id="board-results-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Title</th>
+                <th>Location</th>
+              </tr>
+            </thead>
+            <tbody id="board-results-tbody"></tbody>
+          </table>
+          <button id="import-selected-btn" type="button">Import selected</button>
+        </div>
+      </div>
+    </section>
+
     <section id="jobs-section">
       <h2>Jobs</h2>
       <table id="jobs-table">
