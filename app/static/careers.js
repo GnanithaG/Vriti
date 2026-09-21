@@ -1,4 +1,5 @@
 const userEmailEl = document.getElementById("user-email");
+const userAvatarEl = document.getElementById("user-avatar");
 const logoutBtn = document.getElementById("logout-btn");
 
 const onboardingSection = document.getElementById("onboarding-section");
@@ -226,6 +227,7 @@ async function bootstrap() {
   }
   const me = await meRes.json();
   userEmailEl.textContent = me.email;
+  userAvatarEl.textContent = me.email.charAt(0).toUpperCase();
 
   loadResumesAndMatches();
 }

@@ -633,6 +633,7 @@ tailorSaveBtn.addEventListener("click", async () => {
 // --- Auth gate -------------------------------------------------------------
 
 const userEmailEl = document.getElementById("user-email");
+const userAvatarEl = document.getElementById("user-avatar");
 const logoutBtn = document.getElementById("logout-btn");
 
 logoutBtn.addEventListener("click", async () => {
@@ -648,6 +649,7 @@ async function bootstrap() {
   }
   const me = await meRes.json();
   userEmailEl.textContent = me.email;
+  userAvatarEl.textContent = me.email.charAt(0).toUpperCase();
 
   loadProfile();
   loadStats();

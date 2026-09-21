@@ -8,27 +8,41 @@
 </head>
 <body>
   <header class="app-header">
-    <div>
-      <h1>JobPilot</h1>
-      <p class="tagline">Upload a resume, see how it matches your saved roles.</p>
+    <div class="brand">
+      <div class="brand-mark">JP</div>
+      <div>
+        <h1>JobPilot</h1>
+        <p class="tagline">Upload a resume, see how it matches your saved roles.</p>
+      </div>
     </div>
     <div class="account-bar">
       <nav class="top-nav">
         <a href="/careers" class="active">Careers</a>
         <a href="/">Pipeline</a>
       </nav>
-      <span id="user-email"></span>
+      <div class="account-chip">
+        <span id="user-avatar" class="avatar"></span>
+        <span id="user-email"></span>
+      </div>
       <button id="logout-btn" type="button" class="secondary-btn">Log out</button>
     </div>
   </header>
 
   <main>
     <section id="onboarding-section" class="hidden">
-      <h2>Upload your resume to get started</h2>
-      <p class="hint">
-        Nothing else on this page works until you upload a resume — JobPilot matches it against
-        every job you've imported.
-      </p>
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 16V4M12 4 7 9M12 4l5 5" />
+            <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+          </svg>
+        </div>
+        <h3>Upload your resume to get started</h3>
+        <p>
+          Nothing else on this page works until you upload a resume — JobPilot matches it against
+          every job you've imported.
+        </p>
+      </div>
       <form id="onboarding-upload-form" class="inline-form">
         <input type="text" id="onboarding-label-input" placeholder="Label (e.g. Software Engineer resume)" required />
         <input type="file" id="onboarding-file-input" accept=".pdf,.docx" required />
