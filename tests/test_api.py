@@ -403,6 +403,36 @@ def test_import_from_url(client, monkeypatch):
     assert application["location"] == "Remote"
 
 
+def test_import_from_url_blocked_by_anti_bot_protection(client, monkeypatch):
+    register(client)
+    import app.routers.imports as imports_module
+
+    monkeypatch.setattr(
+        imports_module.httpx,
+        "get",
+        lambda *a, **k: FakeResponse(text="", status_code=403),
+    )
+
+    res = client.post("/api/imports/url", json={"url": "https://example.com/blocked"})
+    assert res.status_code == 502
+    assert "extension" in res.json()["detail"].lower()
+
+
+def test_import_from_url_js_rendered_page_with_no_extractable_content(client, monkeypatch):
+    register(client)
+    import app.routers.imports as imports_module
+
+    monkeypatch.setattr(
+        imports_module.httpx,
+        "get",
+        lambda *a, **k: FakeResponse(text="<html><body><div id='app'></div></body></html>"),
+    )
+
+    res = client.post("/api/imports/url", json={"url": "https://example.com/js-app"})
+    assert res.status_code == 422
+    assert "extension" in res.json()["detail"].lower()
+
+
 def test_import_greenhouse_filters_by_keyword(client, monkeypatch):
     register(client)
     import app.routers.imports as imports_module

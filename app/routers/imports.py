@@ -9,8 +9,24 @@ from .applications import get_application_row
 
 router = APIRouter(prefix="/api/imports", tags=["imports"])
 
-REQUEST_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; Vriti/0.1)"}
-REQUEST_TIMEOUT = 10.0
+# A generic-scraper User-Agent like the old "Vriti/0.1" one is an instant
+# signal to most job-board WAFs (Cloudflare/PerimeterX-style) to block the
+# request outright, even for pages a person can freely view in a real
+# browser. This is what a real Chrome-on-Windows request looks like, which
+# gets a plain "paste this job URL" fetch (one URL, one request, run from
+# the person's own machine — not a crawler) past naive UA sniffing. It does
+# nothing against sites that require executing JS or solving a browser
+# challenge (LinkedIn in particular) — those still need the extension.
+REQUEST_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Upgrade-Insecure-Requests": "1",
+}
+REQUEST_TIMEOUT = 15.0
 
 
 @router.post("/url")
@@ -23,12 +39,40 @@ def import_from_url(payload: UrlImportIn, user: dict = Depends(get_current_user)
             follow_redirects=True,
         )
         res.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (403, 429):
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "That site blocked this request (probably anti-bot "
+                    "protection) even though the page loads fine in a "
+                    "browser. Use the Vriti browser extension's "
+                    "\"Capture this job\" button on that page instead — it "
+                    "reads the page as your browser rendered it, so it "
+                    "isn't affected by this."
+                ),
+            ) from exc
+        raise HTTPException(
+            status_code=502, detail=f"Could not fetch that URL: {exc}"
+        ) from exc
     except httpx.HTTPError as exc:
         raise HTTPException(
             status_code=502, detail=f"Could not fetch that URL: {exc}"
         ) from exc
 
     job = parse_job_posting_html(res.text)
+    if not job.get("title") and not job.get("description"):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Fetched the page, but couldn't find a job posting in it — "
+                "likely a site that renders the listing with JavaScript "
+                "rather than sending it in the page itself. Use the Vriti "
+                "browser extension's \"Capture this job\" button on that "
+                "page instead."
+            ),
+        )
+
     with db() as conn:
         catalog_job = upsert_job(
             conn,
