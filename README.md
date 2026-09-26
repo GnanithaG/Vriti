@@ -1,10 +1,22 @@
-# Vriti
+# Vriti - Job Application Assistant
 
-**An AI job assistant that finds jobs, tailors your resume with an LLM, and applies after you approve, all from an app on your phone.**
+*Vriti (वृत्ति) means "livelihood" or "work" in Sanskrit.*
 
-Vriti searches job boards three times a day, scores every posting against your resume, and tailors your resume, cover letter and application answers with Claude. Its keyword score is honest and it never invents experience. When you tap **Approve**, a headless browser fills in and submits the application.
+## Why I built this
 
-## Features
+I'm a Business Analyst with 6+ years of experience across banking, healthcare and cloud infrastructure, finishing my Master's in Computer Science. When I started job hunting, I learned what everyone learns: the search itself becomes a full-time job.
+
+Every good posting meant the same routine. I read the description, checked whether I was even eligible, making adjustments my resume to match its wording so an ATS wouldn't filter me out, wrote a cover letter, and then typed the same answers into another application form. Repeat that for every posting across LinkedIn, Indeed, Dice and ZipRecruiter, and there's little time left for the things that actually get you hired: networking, preparing for interviews, and learning.
+
+As a Business Analyst, my job is to look at a slow, repetitive process and redesign it. So I treated my own job search like a client project. I mapped the as-is process, found the steps that were pure repetition, and asked which of them an LLM could do well and which still needed a human. The result is Vriti.
+
+**Vriti does the repetitive work, and I make the decisions.** It finds new postings three times a day, filters out the ones I'm not eligible for, and ranks the rest against my resume. It tailors my resume, cover letter and answers for each job I pick. It never invents experience, and it tells me honestly which keywords I'm missing. When I approve, it fills in and submits the application. Nothing is submitted without my review.
+
+## What it does
+
+A phone app backed by a Python server. The server searches job boards three times a day, scores every posting against your resume, and uses Claude to tailor your resume, cover letter and application answers. When you tap **Approve**, a headless browser fills in and submits the application.
+
+### Features
 
 | | |
 |---|---|
