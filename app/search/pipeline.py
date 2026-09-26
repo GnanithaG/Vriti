@@ -12,7 +12,7 @@ from ..push import notify
 from . import adzuna, jsearch
 from .filters import blocks_sponsorship, dedupe_key, matches_excludes, title_fits
 
-log = logging.getLogger("vriti.search")
+log = logging.getLogger("upajna.search")
 
 DEFAULT_SEARCH = {
     "titles": ["Business Analyst", "Business Systems Analyst", "IT Business Analyst", "Technical Business Analyst", "Agile Business Analyst"],

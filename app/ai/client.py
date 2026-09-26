@@ -14,7 +14,7 @@ from pydantic import BaseModel, ValidationError
 
 from ..config import get_settings
 
-log = logging.getLogger("vriti.ai")
+log = logging.getLogger("upajna.ai")
 T = TypeVar("T", bound=BaseModel)
 PROMPTS = Path(__file__).parent / "prompts"
 _client: Optional[AsyncAnthropic] = None

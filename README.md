@@ -1,6 +1,4 @@
-# Vriti - Job Application Assistant
-
-*Vriti (वृत्ति) means "livelihood" or "work" in Sanskrit.*
+# Upajna - Job Application Assistant
 
 ## Why I built this
 
@@ -8,9 +6,9 @@ I'm a Business Analyst with 6+ years of experience across banking, healthcare an
 
 Every good posting meant the same routine. I read the description, checked whether I was even eligible, making adjustments my resume to match its wording so an ATS wouldn't filter me out, wrote a cover letter, and then typed the same answers into another application form. Repeat that for every posting across LinkedIn, Indeed, Dice and ZipRecruiter, and there's little time left for the things that actually get you hired: networking, preparing for interviews, and learning.
 
-As a Business Analyst, my job is to look at a slow, repetitive process and redesign it. So I treated my own job search like a client project. I mapped the as-is process, found the steps that were pure repetition, and asked which of them an LLM could do well and which still needed a human. The result is Vriti.
+As a Business Analyst, my job is to look at a slow, repetitive process and redesign it. So I treated my own job search like a client project. I mapped the as-is process, found the steps that were pure repetition, and asked which of them an LLM could do well and which still needed a human. The result is Upajna.
 
-**Vriti does the repetitive work, and I make the decisions.** It finds new postings three times a day, filters out the ones I'm not eligible for, and ranks the rest against my resume. It tailors my resume, cover letter and answers for each job I pick. It never invents experience, and it tells me honestly which keywords I'm missing. When I approve, it fills in and submits the application. Nothing is submitted without my review.
+**Upajna does the repetitive work, and I make the decisions.** It finds new postings three times a day, filters out the ones I'm not eligible for, and ranks the rest against my resume. It tailors my resume, cover letter and answers for each job I pick. It never invents experience, and it tells me honestly which keywords I'm missing. When I approve, it fills in and submits the application. Nothing is submitted without my review.
 
 ## What it does
 
@@ -104,22 +102,22 @@ tests/               pytest: API flow, filters, AI parsing/retry, real-browser f
 | JSearch | rapidapi.com → JSearch → Subscribe → copy **X-RapidAPI-Key** | `JSEARCH_API_KEY` |
 | Adzuna | developer.adzuna.com → Dashboard | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` |
 
-Check each provider's current plan limits and prices. By default Vriti makes about 3 JSearch requests per run (about 270 a month); lower `JSEARCH_QUERIES_PER_RUN` if needed.
+Check each provider's current plan limits and prices. By default Upajna makes about 3 JSearch requests per run (about 270 a month); lower `JSEARCH_QUERIES_PER_RUN` if needed.
 
 ### 2. Push to GitHub
 
 ```bash
-cd vriti
-git init && git add . && git commit -m "Vriti"
-git remote add origin https://github.com/<you>/vriti.git   # create the repo on github.com first
+cd upajna
+git init && git add . && git commit -m "Upajna"
+git remote add origin https://github.com/<you>/upajna.git   # create the repo on github.com first
 git push -u origin main
 ```
 
 ### 3. Railway
 
-1. railway.com → **New Project → Deploy from GitHub repo** → `vriti`. It builds from the `Dockerfile`, which includes Chromium.
+1. railway.com → **New Project → Deploy from GitHub repo** → `upajna`. It builds from the `Dockerfile`, which includes Chromium.
 2. **+ New → Database → PostgreSQL.**
-3. On the `vriti` service → **Variables**:
+3. On the `upajna` service → **Variables**:
    - `DATABASE_URL` = `${{Postgres.DATABASE_URL}}`
    - `APP_PASSWORD` = the password you'll sign in with
    - `SESSION_SECRET` = output of `python -c "import secrets; print(secrets.token_hex(32))"`
@@ -157,6 +155,6 @@ pytest -q                   # 21 tests; runs offline with mocked APIs
 ## Limits
 
 - LinkedIn and Indeed don't offer personal APIs for applying, and they discourage automation. Those jobs come back to you with everything prepared.
-- Adzuna shortens job descriptions. Vriti fetches the full posting before tailoring when the site allows it.
+- Adzuna shortens job descriptions. Upajna fetches the full posting before tailoring when the site allows it.
 - Application forms vary. The filler reads labels generically, so some forms will need you. Start in test mode.
 - API usage (Claude, JSearch) is billed to your own accounts.

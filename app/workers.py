@@ -11,7 +11,7 @@ from .config import get_settings
 from .push import notify
 from .search.adzuna import fetch_full_description
 
-log = logging.getLogger("vriti.workers")
+log = logging.getLogger("upajna.workers")
 
 
 class Queue:

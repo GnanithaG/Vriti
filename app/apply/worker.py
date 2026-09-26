@@ -16,7 +16,7 @@ from ..ai import map_form_fields
 from ..config import get_settings
 from ..documents import letter_docx, resume_docx
 
-log = logging.getLogger("vriti.apply")
+log = logging.getLogger("upajna.apply")
 _HERE = Path(__file__).parent
 
 
@@ -32,7 +32,7 @@ HANDOFF = {
     "linkedin": "LinkedIn applications need your own sign-in. Open the application, and use the Answers tab to copy your approved answers.",
     "indeed": "Indeed applications need your own sign-in. Open the application and use your approved answers.",
     "workday": "Workday needs an account on this company's site. Open the application, sign in or create the account, then use your approved answers.",
-    "other": "This site isn't one Vriti can fill automatically yet. Open the application and use your approved resume and answers.",
+    "other": "This site isn't one Upajna can fill automatically yet. Open the application and use your approved resume and answers.",
 }
 CONFIRM = re.compile(r"(thank you for (your )?(applying|application|interest)|thanks for applying|application (has been )?(received|submitted)|we('ve| have) received your application|successfully submitted)", re.I)
 
@@ -73,7 +73,7 @@ def _plus(days: int) -> str:
 
 
 async def fill_field(page, f: dict, value, files: dict) -> None:
-    """Fill one field found by collect_fields.js (addressed by its data-vriti key)."""
+    """Fill one field found by collect_fields.js (addressed by its data-upajna key)."""
     if value is None or value == "":
         return
     el = page.locator(f'[data-od-key="{f["key"]}"]').first
@@ -140,7 +140,7 @@ async def apply_one(job_id: str) -> str:
     profile = db.get_setting("profile") or {}
     resume_text = (db.get_setting("resume") or {}).get("text", "")
     r = job.get("result") or {}
-    with tempfile.TemporaryDirectory(prefix="vriti-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="upajna-") as tmp:
         base = r.get("fileBase") or "Resume"
         files = {"resume": str(Path(tmp) / f"{base}.docx")}
         Path(files["resume"]).write_bytes(resume_docx(r.get("resume") or {}, profile.get("name", "")))

@@ -60,6 +60,6 @@ def test_full_flow(client):
 
 def test_phone_app_is_served(client):
     r = client.get("/")
-    assert r.status_code == 200 and "Vriti" in r.text
+    assert r.status_code == 200 and "Upajna" in r.text
     assert client.get("/manifest.webmanifest").status_code == 200
     assert client.get("/sw.js").status_code == 200

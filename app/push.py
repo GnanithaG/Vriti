@@ -8,7 +8,7 @@ from pywebpush import WebPushException, webpush
 from . import db
 from .config import get_settings
 
-log = logging.getLogger("vriti.push")
+log = logging.getLogger("upajna.push")
 
 
 def enabled() -> bool:

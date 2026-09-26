@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     port: int = 8000
     app_password: str = ""
     session_secret: str = ""
-    database_url: str = "sqlite:///./data/vriti.db"
+    database_url: str = "sqlite:///./data/upajna.db"
     tz_name: str = "America/Los_Angeles"
     search_cron: str = "0 11,15,19 * * *"
 

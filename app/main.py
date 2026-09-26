@@ -1,4 +1,4 @@
-"""Vriti API server: phone app, REST API, scheduled job search, tailoring and apply workers."""
+"""Upajna API server: phone app, REST API, scheduled job search, tailoring and apply workers."""
 from __future__ import annotations
 
 import logging
@@ -22,7 +22,7 @@ from .documents import letter_docx, read_resume, resume_docx
 from .search import DEFAULT_SEARCH, is_running, run_search
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-log = logging.getLogger("vriti")
+log = logging.getLogger("upajna")
 STATIC = Path(__file__).resolve().parent.parent / "static"
 scheduler = AsyncIOScheduler()
 
@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown(wait=False)
 
 
-app = FastAPI(title="Vriti", lifespan=lifespan)
+app = FastAPI(title="Upajna", lifespan=lifespan)
 api = APIRouter(prefix="/api", dependencies=[Depends(auth.require_auth)])
 
 

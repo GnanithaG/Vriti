@@ -1,4 +1,4 @@
-// Vriti phone app.
+// Upajna phone app.
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -335,7 +335,7 @@ function notifPerm() { return typeof Notification === "undefined" ? "unsupported
 function b64ToUint8(b64) { const p = "=".repeat((4 - (b64.length % 4)) % 4); const s = atob((b64 + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from([...s].map((c) => c.charCodeAt(0))); }
 $("#enablePush").addEventListener("click", async () => {
   try {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return toast("This browser can't show notifications. On iPhone, add Vriti to your Home Screen first.");
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return toast("This browser can't show notifications. On iPhone, add Upajna to your Home Screen first.");
     const perm = await Notification.requestPermission();
     if (perm !== "granted") return toast("Notifications weren't allowed.");
     const reg = await navigator.serviceWorker.ready;

@@ -7,7 +7,7 @@ from itsdangerous import BadSignature, SignatureExpired, TimestampSigner
 
 from .config import get_settings
 
-COOKIE = "vriti_session"
+COOKIE = "upajna_session"
 MAX_AGE = 60 * 24 * 3600
 _attempts: dict[str, tuple[int, float]] = {}
 

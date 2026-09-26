@@ -56,7 +56,7 @@ def html_to_text(raw: str) -> str:
 async def fetch_full_description(url: str) -> tuple[str, str]:
     """Best effort: follow the link and return (text, final_url)."""
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 Vriti"}) as c:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 Upajna"}) as c:
             r = await c.get(url)
             if r.status_code >= 400:
                 return "", url
